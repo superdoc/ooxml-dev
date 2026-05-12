@@ -32,8 +32,9 @@ import {
 	type SymbolHit,
 } from "./ooxml-queries";
 import {
+	contentTypesOf,
 	findPartByContentType,
-	findPartByRelationshipType,
+	findPartsByRelationshipType,
 	type OpcPart,
 	searchParts,
 } from "./opc-parts";
@@ -364,8 +365,18 @@ export async function runOoxmlTool(
 				return formatPackagePartNotFound("content type", contentType);
 			}
 			if (relationshipType) {
-				const hit = findPartByRelationshipType(relationshipType);
-				if (hit) return formatPackagePartReport(hit);
+				const hits = findPartsByRelationshipType(relationshipType);
+				if (hits.length === 1) return formatPackagePartReport(hits[0]);
+				if (hits.length > 1) {
+					// Shared rels (officeDocument across WML/SML/PML, customXml
+					// across families) intentionally hit multiple parts.
+					return formatPackagePartList(hits, {
+						title: `Package parts using relationship '${relationshipType}'`,
+						query: "",
+						footer:
+							"This relationship type is shared across package families. Disambiguate by the source part (the package's main part determines whether `.../relationships/officeDocument` points at a Word, Excel, or PowerPoint main part).",
+					});
+				}
 				return formatPackagePartNotFound("relationship type", relationshipType);
 			}
 			const matches = searchParts(query);
@@ -581,7 +592,12 @@ function formatPackagePartReport(p: OpcPart): string {
 	lines.push(`## OPC Part: ${p.name}`);
 	lines.push("");
 	lines.push(`- key: \`${p.key}\``);
-	lines.push(`- content type: \`${p.contentType}\``);
+	const cts = contentTypesOf(p);
+	if (cts.length === 1) {
+		lines.push(`- content type: \`${cts[0]}\``);
+	} else {
+		lines.push(`- content types: ${cts.map((c) => `\`${c}\``).join(", ")}`);
+	}
 	lines.push(
 		`- source relationship: ${p.relationshipType ? `\`${p.relationshipType}\`` : "_(implicit, none)_"}`,
 	);
@@ -601,7 +617,7 @@ function formatPackagePartReport(p: OpcPart): string {
 
 function formatPackagePartList(
 	matches: readonly OpcPart[],
-	opts: { title: string; query: string },
+	opts: { title: string; query: string; footer?: string },
 ): string {
 	const lines: string[] = [];
 	lines.push(`## ${opts.title}`);
@@ -617,13 +633,16 @@ function formatPackagePartList(
 	lines.push("| key | name | content type | families |");
 	lines.push("| --- | --- | --- | --- |");
 	for (const p of matches) {
-		lines.push(
-			`| \`${p.key}\` | ${p.name} | \`${p.contentType}\` | ${p.packageFamilies.join(", ")} |`,
-		);
+		const cts = contentTypesOf(p);
+		// Show first canonical type plus a "+N" indicator if there are more,
+		// so the table stays compact for image/* and similar enumerated sets.
+		const ctCell = cts.length === 1 ? `\`${cts[0]}\`` : `\`${cts[0]}\` _(+${cts.length - 1} more)_`;
+		lines.push(`| \`${p.key}\` | ${p.name} | ${ctCell} | ${p.packageFamilies.join(", ")} |`);
 	}
 	lines.push("");
 	lines.push(
-		"Pass an exact `content_type` or `relationship_type` for the full report on a single part.",
+		opts.footer ??
+			"Pass an exact `content_type` or `relationship_type` for the full report on a single part.",
 	);
 	return lines.join("\n");
 }

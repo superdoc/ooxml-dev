@@ -8,8 +8,9 @@
 
 import { expect, test } from "bun:test";
 import {
+	contentTypesOf,
 	findPartByContentType,
-	findPartByRelationshipType,
+	findPartsByRelationshipType,
 	OPC_PARTS,
 	type OpcPart,
 	searchParts,
@@ -28,7 +29,8 @@ test("OPC_PARTS dataset has unique keys and non-empty required fields", () => {
 		expect(keys.has(p.key)).toBe(false);
 		keys.add(p.key);
 		expect(p.name.length).toBeGreaterThan(0);
-		expect(p.contentType.length).toBeGreaterThan(0);
+		expect(contentTypesOf(p).length).toBeGreaterThan(0);
+		for (const ct of contentTypesOf(p)) expect(ct.length).toBeGreaterThan(0);
 		expect(p.typicalPaths.length).toBeGreaterThan(0);
 		expect(p.sourceSections.length).toBeGreaterThan(0);
 		expect(p.packageFamilies.length).toBeGreaterThan(0);
@@ -50,16 +52,45 @@ test("findPartByContentType: returns null on miss", () => {
 	expect(findPartByContentType("application/x-not-real")).toBeNull();
 });
 
-test("findPartByRelationshipType: exact match for customXmlProps", () => {
-	const hit = findPartByRelationshipType(
+test("findPartByContentType: every enumerated image media type resolves to the Image Part", () => {
+	// Image Part stores multiple content types (image/png, image/jpeg, ...).
+	// Each must resolve via exact lookup so real [Content_Types].xml entries
+	// match without the caller stripping a wildcard.
+	for (const ct of ["image/png", "image/jpeg", "image/gif", "image/tiff", "image/x-emf"]) {
+		const hit = findPartByContentType(ct);
+		expect(hit?.key).toBe("image");
+	}
+	// An image media type the spec doesn't enumerate (image/avif, image/webp)
+	// will fall through to null. That's the expected behavior; the not-found
+	// path guides the agent to query for "image" instead.
+	expect(findPartByContentType("image/avif")).toBeNull();
+});
+
+test("findPartsByRelationshipType: unique rel returns a single-element array", () => {
+	const hits = findPartsByRelationshipType(
 		"http://schemas.openxmlformats.org/officeDocument/2006/relationships/customXmlProps",
 	);
-	expect(hit?.key).toBe("custom-xml-data-properties");
-	// Verifies the spec/XSD URI policy: the rootNamespace pins the XSD URI,
-	// not the spec-prose URI (.../customXmlDataProps).
-	expect(hit?.rootNamespace).toBe(
+	expect(hits).toHaveLength(1);
+	expect(hits[0].key).toBe("custom-xml-data-properties");
+	// Spec/XSD URI policy: rootNamespace pins the XSD URI, not the
+	// spec-prose .../customXmlDataProps URI.
+	expect(hits[0].rootNamespace).toBe(
 		"http://schemas.openxmlformats.org/officeDocument/2006/customXml",
 	);
+});
+
+test("findPartsByRelationshipType: shared officeDocument rel returns all three main parts", () => {
+	// The .../relationships/officeDocument rel points at the main part for
+	// WML / SML / PML. Collapsing them in the lookup hides two of three.
+	const hits = findPartsByRelationshipType(
+		"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
+	);
+	const keys = hits.map((h) => h.key).sort();
+	expect(keys).toEqual(["pml-presentation", "sml-workbook", "wml-document"]);
+});
+
+test("findPartsByRelationshipType: miss returns empty array", () => {
+	expect(findPartsByRelationshipType("http://example.invalid/not-a-rel")).toEqual([]);
 });
 
 test("searchParts: empty query returns the full set", () => {
@@ -106,6 +137,36 @@ test("ooxml_package_part: exact relationship_type matches the customXmlProps par
 	expect(out).toContain("## OPC Part: Custom XML Data Storage Properties Part");
 	// The spec/XSD divergence note is surfaced.
 	expect(out).toContain("XSD targets");
+});
+
+test("ooxml_package_part: shared officeDocument rel renders all three main parts", async () => {
+	const out = await runOoxmlTool(
+		"ooxml_package_part",
+		{
+			relationship_type:
+				"http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument",
+		},
+		sqlStub,
+	);
+	expect(out).toContain("Package parts using relationship");
+	// All three main parts must appear; the previous Map<string, OpcPart>
+	// regression caused only the last-inserted (Presentation) to surface.
+	expect(out).toContain("`wml-document`");
+	expect(out).toContain("`sml-workbook`");
+	expect(out).toContain("`pml-presentation`");
+	expect(out).toContain("shared across package families");
+});
+
+test("ooxml_package_part: image/png exact content_type resolves to the Image Part", async () => {
+	const out = await runOoxmlTool(
+		"ooxml_package_part",
+		{ content_type: "image/png" },
+		sqlStub,
+	);
+	expect(out).toContain("## OPC Part: Image Part");
+	// Multi-content-type record renders as plural label.
+	expect(out).toContain("content types:");
+	expect(out).toContain("`image/png`");
 });
 
 test("ooxml_package_part: query substring returns a list table", async () => {

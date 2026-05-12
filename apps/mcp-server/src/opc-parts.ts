@@ -25,8 +25,14 @@ export interface OpcPart {
 	name: string;
 	/** Stable, machine-readable id (kebab-case). Stable across spec edits. */
 	key: string;
-	/** OPC content type (Content_Types.xml `Override` or `Default` value). */
-	contentType: string;
+	/**
+	 * OPC content type(s) (Content_Types.xml `Override` or `Default` value).
+	 * Most parts have a single canonical value; binary parts that accept any
+	 * media type in a family (image, embedded font) carry the enumerated set
+	 * called out in the spec so exact lookups against [Content_Types].xml
+	 * resolve. Display uses the first entry; lookups index every entry.
+	 */
+	contentType: string | string[];
 	/**
 	 * Source relationship type URI. `null` when the part is referenced only
 	 * by an implicit relationship from the package (e.g. core properties).
@@ -305,14 +311,25 @@ export const OPC_PARTS: readonly OpcPart[] = [
 	{
 		name: "Image Part",
 		key: "image",
-		contentType: "image/* (e.g. image/png, image/jpeg, image/gif, image/x-emf)",
+		// Enumerated set called out in Part 1 §15.2.13. Real [Content_Types].xml
+		// entries use a specific media type per image, not a wildcard; agents
+		// looking up image/png must resolve to this record.
+		contentType: [
+			"image/png",
+			"image/jpeg",
+			"image/gif",
+			"image/tiff",
+			"image/x-emf",
+			"image/x-wmf",
+			"image/bmp",
+		],
 		relationshipType: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
 		rootNamespace: null,
 		rootElement: null,
 		typicalPaths: ["word/media/image1.png", "xl/media/image1.png", "ppt/media/image1.png"],
 		sourceSections: ["Part 1, §15.2.13"],
 		notes:
-			"Binary part; content type is the actual image media type. Multiple images get separate parts.",
+			"Binary part; the content type recorded in [Content_Types].xml is the specific image media type. Each image becomes its own part. Other image/* media types may appear in practice; only the spec-enumerated set is indexed here.",
 		packageFamilies: ["wordprocessing", "spreadsheet", "presentation"],
 	},
 	{
@@ -347,19 +364,36 @@ export const OPC_PARTS: readonly OpcPart[] = [
 
 // --- Lookup helpers --------------------------------------------------------
 
+/** Normalize contentType (string | string[]) to a stable array view. */
+export function contentTypesOf(p: OpcPart): readonly string[] {
+	return Array.isArray(p.contentType) ? p.contentType : [p.contentType];
+}
+
 let byContentType: Map<string, OpcPart> | null = null;
-let byRelationshipType: Map<string, OpcPart> | null = null;
+let byRelationshipType: Map<string, OpcPart[]> | null = null;
 
 function indexes(): {
 	byContentType: Map<string, OpcPart>;
-	byRelationshipType: Map<string, OpcPart>;
+	byRelationshipType: Map<string, OpcPart[]>;
 } {
 	if (!byContentType || !byRelationshipType) {
 		byContentType = new Map();
 		byRelationshipType = new Map();
 		for (const p of OPC_PARTS) {
-			byContentType.set(p.contentType, p);
-			if (p.relationshipType) byRelationshipType.set(p.relationshipType, p);
+			// Content type is unique per record by construction (binary parts
+			// enumerate their accepted media types; XML parts have one each).
+			// Index every alias.
+			for (const ct of contentTypesOf(p)) byContentType.set(ct, p);
+			// Relationship type is intentionally non-unique: the .../relationships/
+			// officeDocument rel points at the main part for WML / SML / PML,
+			// the .../relationships/customXml rel can target any custom XML
+			// storage part regardless of family. Group hits per URI so the
+			// caller can disambiguate.
+			if (p.relationshipType) {
+				const bucket = byRelationshipType.get(p.relationshipType);
+				if (bucket) bucket.push(p);
+				else byRelationshipType.set(p.relationshipType, [p]);
+			}
 		}
 	}
 	return { byContentType, byRelationshipType };
@@ -370,13 +404,19 @@ export function findPartByContentType(contentType: string): OpcPart | null {
 	return indexes().byContentType.get(contentType) ?? null;
 }
 
-/** Exact-match lookup by source relationship type URI. */
-export function findPartByRelationshipType(relationshipType: string): OpcPart | null {
-	return indexes().byRelationshipType.get(relationshipType) ?? null;
+/**
+ * Lookup by source relationship type URI. Returns every part that uses
+ * the URI: the `.../relationships/officeDocument` rel, for example,
+ * points at three different main parts (Word / Excel / PowerPoint), and
+ * the caller has to disambiguate by package family. Returns an empty
+ * array on miss.
+ */
+export function findPartsByRelationshipType(relationshipType: string): readonly OpcPart[] {
+	return indexes().byRelationshipType.get(relationshipType) ?? [];
 }
 
 /**
- * Case-insensitive substring search over name, key, content type,
+ * Case-insensitive substring search over name, key, content type(s),
  * relationship type, root namespace, root element, and notes. Returns
  * matches in their declared order in OPC_PARTS (which groups by family).
  */
@@ -388,7 +428,7 @@ export function searchParts(query: string): OpcPart[] {
 		const haystack = [
 			p.name,
 			p.key,
-			p.contentType,
+			...contentTypesOf(p),
 			p.relationshipType ?? "",
 			p.rootNamespace ?? "",
 			p.rootElement ?? "",
