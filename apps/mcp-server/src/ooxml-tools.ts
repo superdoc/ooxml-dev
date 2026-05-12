@@ -15,12 +15,14 @@ import {
 	type AttrEntry,
 	type ChildEdge,
 	type EnumEntry,
+	findLocalElementsInNamespace,
 	findLocalNameAcrossNamespaces,
 	getAttributes,
 	getChildren,
 	getEnums,
 	getNamespaceInfo,
 	knownPrefixes,
+	type LocalElementHit,
 	type LocalNameHit,
 	listNamespaces,
 	lookupElement,
@@ -216,6 +218,20 @@ export async function runOoxmlTool(
 			if (!q.ok) return formatNotFound(`could not parse qname: ${q.reason}`);
 			const hit = await lookupElement(sql, q.qname.namespace, q.qname.localName, profile);
 			if (!hit) {
+				// No global element. Look for local-element declarations in the
+				// same namespace; they're how OOXML expresses things like
+				// w:cs, w:lang, w:bdo etc. and the report can name the owning
+				// group/complexType plus the declared type honestly without
+				// pretending it's a top-level Element.
+				const locals = await findLocalElementsInNamespace(
+					sql,
+					q.qname.localName,
+					q.qname.namespace,
+					profile,
+				);
+				if (locals.length > 0) {
+					return formatLocalElementReport(q.qname, locals, profile);
+				}
 				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile, {
 					kind: "element",
 				});
@@ -264,6 +280,20 @@ export async function runOoxmlTool(
 				}
 			}
 			if (!typeSym) {
+				// Top-level lookup missed. Many elements an agent sees in real
+				// .docx (w:cs, w:rtl, w:lang, w:dir, w:bdo, ...) are declared
+				// inline inside groups / complexTypes; resolve through that
+				// before falling back to cross-vocab did-you-mean.
+				const local = await resolveLocalElement(sql, q.qname, profile);
+				if (local.kind === "single") {
+					const children = await getChildren(sql, local.typeSym.id, profile);
+					return formatChildrenReport(null, local.typeSym, children, profile, {
+						resolvedFromLocal: local.first,
+					});
+				}
+				if (local.kind === "ambiguous") {
+					return formatLocalElementAmbiguous(q.qname, local.locals);
+				}
 				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile);
 				return formatNotFound(
 					`children for ${q.qname.localName} in namespace ${q.qname.namespace}`,
@@ -287,6 +317,16 @@ export async function runOoxmlTool(
 				}
 			}
 			if (!typeSym) {
+				const local = await resolveLocalElement(sql, q.qname, profile);
+				if (local.kind === "single") {
+					const attrs = await getAttributes(sql, local.typeSym.id, profile);
+					return formatAttributesReport(null, local.typeSym, attrs, profile, {
+						resolvedFromLocal: local.first,
+					});
+				}
+				if (local.kind === "ambiguous") {
+					return formatLocalElementAmbiguous(q.qname, local.locals);
+				}
 				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile);
 				return formatNotFound(
 					`attributes for ${q.qname.localName} in namespace ${q.qname.namespace}`,
@@ -414,13 +454,23 @@ function formatChildrenReport(
 	type: SymbolHit,
 	children: ChildEdge[],
 	profile: string,
+	opts: { resolvedFromLocal?: LocalElementHit } = {},
 ): string {
 	const lines: string[] = [];
-	const heading = element
-		? `Children of ${element.localName} (via type ${type.localName})`
-		: `Children of ${type.localName}`;
+	const local = opts.resolvedFromLocal;
+	const heading = local
+		? `Children of ${local.localName} (resolved via local element in ${local.parentKind} ${local.parentLocalName}, type ${type.localName})`
+		: element
+			? `Children of ${element.localName} (via type ${type.localName})`
+			: `Children of ${type.localName}`;
 	lines.push(`## ${heading}`);
 	lines.push("");
+	if (local) {
+		lines.push(
+			`_\`${local.localName}\` has no top-level qname; it's a local element declared in ${local.parentKind} \`${local.parentLocalName}\`. Children come from its declared type \`${type.localName}\`._`,
+		);
+		lines.push("");
+	}
 	lines.push(`- profile: ${profile}`);
 	lines.push(`- type vocabulary: ${type.vocabularyId}`);
 	lines.push(`- type namespace: ${type.namespaceUri}`);
@@ -454,13 +504,23 @@ function formatAttributesReport(
 	type: SymbolHit,
 	attrs: AttrEntry[],
 	profile: string,
+	opts: { resolvedFromLocal?: LocalElementHit } = {},
 ): string {
 	const lines: string[] = [];
-	const heading = element
-		? `Attributes of ${element.localName} (via type ${type.localName})`
-		: `Attributes of ${type.localName}`;
+	const local = opts.resolvedFromLocal;
+	const heading = local
+		? `Attributes of ${local.localName} (resolved via local element in ${local.parentKind} ${local.parentLocalName}, type ${type.localName})`
+		: element
+			? `Attributes of ${element.localName} (via type ${type.localName})`
+			: `Attributes of ${type.localName}`;
 	lines.push(`## ${heading}`);
 	lines.push("");
+	if (local) {
+		lines.push(
+			`_\`${local.localName}\` has no top-level qname; it's a local element declared in ${local.parentKind} \`${local.parentLocalName}\`. Attributes come from its declared type \`${type.localName}\`._`,
+		);
+		lines.push("");
+	}
 	lines.push(`- profile: ${profile}`);
 	lines.push(`- type vocabulary: ${type.vocabularyId}`);
 	if (type.sourceName) lines.push(`- source: ${type.sourceName}`);
@@ -662,5 +722,96 @@ function formatPackagePartNotFound(
 	lines.push(
 		"- `ooxml_search` if the part type is documented in spec prose but not yet curated here",
 	);
+	return lines.join("\n");
+}
+
+// --- Local element resolution ------------------------------------------
+
+type LocalResolution =
+	| { kind: "single"; typeSym: SymbolHit; first: LocalElementHit; locals: LocalElementHit[] }
+	| { kind: "ambiguous"; locals: LocalElementHit[] }
+	| { kind: "none" };
+
+/**
+ * Try to resolve a missed top-level qname through local element declarations.
+ *
+ * Rules:
+ *   - 0 hits → none. Caller falls back to cross-vocab did-you-mean.
+ *   - >=1 hits, all with the same non-null type_ref that resolves → single.
+ *     The first local hit is preserved for parent-context display.
+ *   - >=1 hits but the type_refs disagree (or none resolve) → ambiguous.
+ *     We refuse to guess and let the caller render a disambiguation list.
+ */
+async function resolveLocalElement(
+	sql: Sql,
+	qname: { namespace: string; localName: string },
+	profile: string,
+): Promise<LocalResolution> {
+	const locals = await findLocalElementsInNamespace(sql, qname.localName, qname.namespace, profile);
+	if (locals.length === 0) return { kind: "none" };
+
+	const typeRefs = new Set(locals.map((l) => l.typeRef).filter((t): t is string => !!t));
+	if (typeRefs.size === 1) {
+		const [typeRef] = typeRefs;
+		const typeSym = await lookupSymbolByTypeRef(sql, typeRef, profile);
+		if (typeSym) {
+			return { kind: "single", typeSym, first: locals[0], locals };
+		}
+	}
+	// Either multiple distinct type_refs, or the single one didn't resolve
+	// (rare; would mean a dangling reference). Either way, surface the
+	// declarations and let the caller decide.
+	return { kind: "ambiguous", locals };
+}
+
+function formatLocalElementAmbiguous(
+	qname: { namespace: string; localName: string },
+	locals: LocalElementHit[],
+): string {
+	const lines: string[] = [];
+	lines.push(`## Ambiguous local element \`${qname.localName}\` in namespace ${qname.namespace}`);
+	lines.push("");
+	lines.push(
+		`\`${qname.localName}\` is declared inline in multiple places with different types; no single answer to return.`,
+	);
+	lines.push("");
+	lines.push("| owner | owner kind | type_ref |");
+	lines.push("| --- | --- | --- |");
+	for (const l of locals) {
+		lines.push(`| \`${l.parentLocalName}\` | ${l.parentKind} | ${l.typeRef ?? "_(none)_"} |`);
+	}
+	lines.push("");
+	lines.push(
+		"Resolve the parent owner (e.g. `ooxml_attributes` on the group/complexType) or pass the desired type directly.",
+	);
+	return lines.join("\n");
+}
+
+function formatLocalElementReport(
+	qname: { namespace: string; localName: string },
+	locals: LocalElementHit[],
+	profile: string,
+): string {
+	const lines: string[] = [];
+	const first = locals[0];
+	lines.push(`## Local element: ${first.localName}`);
+	lines.push("");
+	lines.push(
+		`_\`${first.localName}\` has no top-level qname in this namespace. It's declared inline inside ${first.parentKind} \`${first.parentLocalName}\`. Call \`ooxml_attributes\` or \`ooxml_children\` with the same qname to follow its type._`,
+	);
+	lines.push("");
+	lines.push(`- profile: ${profile}`);
+	lines.push(`- namespace: ${qname.namespace}`);
+	lines.push(`- vocabulary: ${first.vocabularyId}`);
+	if (first.typeRef) lines.push(`- type_ref: ${first.typeRef}`);
+	lines.push("");
+	if (locals.length > 1) {
+		lines.push(`Also declared in ${locals.length - 1} other local context(s):`);
+		for (const l of locals.slice(1)) {
+			lines.push(
+				`- ${l.parentKind} \`${l.parentLocalName}\` (type_ref: ${l.typeRef ?? "_(none)_"})`,
+			);
+		}
+	}
 	return lines.join("\n");
 }
