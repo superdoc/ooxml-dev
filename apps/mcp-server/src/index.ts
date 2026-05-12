@@ -1,10 +1,12 @@
 /**
  * OOXML Reference MCP Server
  *
- * Cloudflare Worker exposing two tool families over MCP:
- *   - prose search    over ECMA-376 PDFs (ooxml_search, ooxml_section, ooxml_parts)
- *   - schema lookup   over the parsed XSD graph (ooxml_element, ooxml_type,
- *                     ooxml_children, ooxml_attributes, ooxml_enum, ooxml_namespace)
+ * Cloudflare Worker exposing three tool families over MCP:
+ *   - prose search     over ECMA-376 PDFs (ooxml_search, ooxml_section, ooxml_parts)
+ *   - schema lookup    over the parsed XSD graph (ooxml_element, ooxml_type,
+ *                      ooxml_children, ooxml_attributes, ooxml_enum, ooxml_namespace)
+ *   - package metadata curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x
+ *                      (ooxml_package_part)
  */
 
 import { createDb } from "./db";

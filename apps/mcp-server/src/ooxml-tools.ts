@@ -31,6 +31,13 @@ import {
 	parseQName,
 	type SymbolHit,
 } from "./ooxml-queries";
+import {
+	contentTypesOf,
+	findPartByContentType,
+	findPartsByRelationshipType,
+	type OpcPart,
+	searchParts,
+} from "./opc-parts";
 
 export const DEFAULT_PROFILE = "transitional";
 
@@ -130,6 +137,33 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 			},
 		},
 	},
+	{
+		name: "ooxml_package_part",
+		description:
+			"Look up OPC (Open Packaging Conventions) part types: content type, source relationship type, root namespace and element, typical paths in the package. Answers 'what kind of part is /customXml/item1.xml?' — package metadata that the schema graph doesn't capture. Four modes: " +
+			"(1) `content_type` exact match (e.g. 'application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml'); " +
+			"(2) `relationship_type` exact match (e.g. '.../officeDocument/2006/relationships/customXmlProps'); " +
+			"(3) `query` case-insensitive substring across name, content type, relationship type, root namespace and element; " +
+			"(4) no args → list every curated part. Curated from ECMA-376 Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x; covers Word / Excel / PowerPoint plus cross-cutting (properties, theme, image, custom XML).",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				content_type: {
+					type: "string",
+					description: "Exact OPC content type (Content_Types.xml value).",
+				},
+				relationship_type: {
+					type: "string",
+					description: "Exact source relationship type URI.",
+				},
+				query: {
+					type: "string",
+					description:
+						"Case-insensitive substring across name, content type, relationship type, namespace, element, notes.",
+				},
+			},
+		},
+	},
 ];
 
 export type OoxmlToolName =
@@ -138,7 +172,8 @@ export type OoxmlToolName =
 	| "ooxml_children"
 	| "ooxml_attributes"
 	| "ooxml_enum"
-	| "ooxml_namespace";
+	| "ooxml_namespace"
+	| "ooxml_package_part";
 
 const OOXML_TOOL_NAMES: ReadonlySet<string> = new Set(OOXML_TOOL_DEFS.map((t) => t.name));
 
@@ -315,6 +350,39 @@ export async function runOoxmlTool(
 					: query
 						? "No matches. Try `ooxml_search` for prose references or call this tool with no args to see every ingested namespace."
 						: "No namespaces ingested. Run `bun run xsd:ingest`.",
+			});
+		}
+
+		case "ooxml_package_part": {
+			const contentType = typeof args.content_type === "string" ? args.content_type.trim() : "";
+			const relationshipType =
+				typeof args.relationship_type === "string" ? args.relationship_type.trim() : "";
+			const query = typeof args.query === "string" ? args.query.trim() : "";
+
+			if (contentType) {
+				const hit = findPartByContentType(contentType);
+				if (hit) return formatPackagePartReport(hit);
+				return formatPackagePartNotFound("content type", contentType);
+			}
+			if (relationshipType) {
+				const hits = findPartsByRelationshipType(relationshipType);
+				if (hits.length === 1) return formatPackagePartReport(hits[0]);
+				if (hits.length > 1) {
+					// Shared rels (officeDocument across WML/SML/PML, customXml
+					// across families) intentionally hit multiple parts.
+					return formatPackagePartList(hits, {
+						title: `Package parts using relationship '${relationshipType}'`,
+						query: "",
+						footer:
+							"This relationship type is shared across package families. Disambiguate by the source part (the package's main part determines whether `.../relationships/officeDocument` points at a Word, Excel, or PowerPoint main part).",
+					});
+				}
+				return formatPackagePartNotFound("relationship type", relationshipType);
+			}
+			const matches = searchParts(query);
+			return formatPackagePartList(matches, {
+				title: query ? `Package parts matching '${query}'` : "Curated OPC package parts",
+				query,
 			});
 		}
 
@@ -516,5 +584,83 @@ function formatNotFound(what: string, profile?: string, extras?: NotFoundExtras)
 		"- `ooxml_search` / `ooxml_section` for elements documented in spec prose but not in the schema graph",
 	);
 	lines.push("- a different profile (currently only `transitional` is populated)");
+	return lines.join("\n");
+}
+
+function formatPackagePartReport(p: OpcPart): string {
+	const lines: string[] = [];
+	lines.push(`## OPC Part: ${p.name}`);
+	lines.push("");
+	lines.push(`- key: \`${p.key}\``);
+	const cts = contentTypesOf(p);
+	if (cts.length === 1) {
+		lines.push(`- content type: \`${cts[0]}\``);
+	} else {
+		lines.push(`- content types: ${cts.map((c) => `\`${c}\``).join(", ")}`);
+	}
+	lines.push(
+		`- source relationship: ${p.relationshipType ? `\`${p.relationshipType}\`` : "_(implicit, none)_"}`,
+	);
+	lines.push(
+		`- root namespace: ${p.rootNamespace ? `\`${p.rootNamespace}\`` : "_(none; binary or arbitrary-XML payload)_"}`,
+	);
+	lines.push(`- root element: ${p.rootElement ? `\`${p.rootElement}\`` : "_(none)_"}`);
+	lines.push(`- typical paths: ${p.typicalPaths.map((t) => `\`${t}\``).join(", ")}`);
+	lines.push(`- package families: ${p.packageFamilies.join(", ")}`);
+	lines.push(`- spec: ${p.sourceSections.join("; ")}`);
+	if (p.notes) {
+		lines.push("");
+		lines.push(`**Notes**: ${p.notes}`);
+	}
+	return lines.join("\n");
+}
+
+function formatPackagePartList(
+	matches: readonly OpcPart[],
+	opts: { title: string; query: string; footer?: string },
+): string {
+	const lines: string[] = [];
+	lines.push(`## ${opts.title}`);
+	lines.push("");
+	if (matches.length === 0) {
+		lines.push("_(no matches)_");
+		lines.push("");
+		lines.push(
+			"Try `ooxml_package_part` with no args to see the full list, or `ooxml_search` for prose references.",
+		);
+		return lines.join("\n");
+	}
+	lines.push("| key | name | content type | families |");
+	lines.push("| --- | --- | --- | --- |");
+	for (const p of matches) {
+		const cts = contentTypesOf(p);
+		// Show first canonical type plus a "+N" indicator if there are more,
+		// so the table stays compact for image/* and similar enumerated sets.
+		const ctCell = cts.length === 1 ? `\`${cts[0]}\`` : `\`${cts[0]}\` _(+${cts.length - 1} more)_`;
+		lines.push(`| \`${p.key}\` | ${p.name} | ${ctCell} | ${p.packageFamilies.join(", ")} |`);
+	}
+	lines.push("");
+	lines.push(
+		opts.footer ??
+			"Pass an exact `content_type` or `relationship_type` for the full report on a single part.",
+	);
+	return lines.join("\n");
+}
+
+function formatPackagePartNotFound(
+	kind: "content type" | "relationship type",
+	value: string,
+): string {
+	const lines: string[] = [];
+	lines.push(`## Not found: OPC part with ${kind} '${value}'`);
+	lines.push("");
+	lines.push("Try one of:");
+	lines.push(
+		"- `ooxml_package_part` with a `query` substring (e.g. 'styles', 'customXml', 'theme')",
+	);
+	lines.push("- `ooxml_package_part` with no args to list every curated part");
+	lines.push(
+		"- `ooxml_search` if the part type is documented in spec prose but not yet curated here",
+	);
 	return lines.join("\n");
 }

@@ -57,6 +57,14 @@ const SCHEMA_TOOLS = [
 	},
 ];
 
+const PACKAGE_TOOLS = [
+	{
+		name: "ooxml_package_part",
+		description:
+			"Look up OPC part types by content type, source relationship type, or query substring. Covers Word, Excel, PowerPoint, and cross-cutting parts (properties, theme, image, custom XML).",
+	},
+];
+
 const EXAMPLE_QUERIES = [
 	"How do I add borders to a table cell?",
 	"How does numbering work in WordprocessingML?",
@@ -96,8 +104,9 @@ export function Mcp() {
 					</div>
 					<h1 className="text-3xl font-bold mb-4">OOXML reference for AI assistants</h1>
 					<p className="text-[var(--color-text-secondary)] max-w-xl mx-auto">
-						Two tool families: prose search across 18,000+ spec chunks, and deterministic schema
-						lookup over the parsed XSDs. Ask in natural language, or query the structure directly.
+						Three tool families: prose search across 18,000+ spec chunks, deterministic schema
+						lookup over the parsed XSDs, and curated OPC package metadata. Ask in natural language,
+						or query the structure directly.
 					</p>
 				</div>
 
@@ -262,6 +271,27 @@ export function Mcp() {
 					</div>
 				</div>
 
+				{/* Package metadata tools */}
+				<div className="mb-10">
+					<h2 className="font-semibold mb-2">Package metadata</h2>
+					<p className="text-sm text-[var(--color-text-secondary)] mb-4">
+						Curated OPC part-type reference: content types, source relationship types, root
+						namespaces, and typical paths in the package.
+					</p>
+					<div className="space-y-3">
+						{PACKAGE_TOOLS.map((tool) => (
+							<div key={tool.name} className="border border-[var(--color-border)] rounded-lg p-4">
+								<div className="flex items-start gap-3">
+									<code className="bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] px-2 py-1 rounded text-sm font-mono shrink-0">
+										{tool.name}
+									</code>
+									<p className="text-sm text-[var(--color-text-secondary)]">{tool.description}</p>
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+
 				{/* Example Queries */}
 				<div className="mb-10">
 					<h2 className="font-semibold mb-4">Example Queries</h2>
@@ -295,9 +325,9 @@ export function Mcp() {
 						tools.
 					</p>
 					<p className="text-sm text-[var(--color-text-secondary)]">
-						By connecting to this MCP server, your AI assistant gains both prose search across the
-						ECMA-376 specification and deterministic schema lookup over the parsed XSDs—making it
-						much easier to work with Office Open XML.
+						By connecting to this MCP server, your AI assistant gains prose search across the
+						ECMA-376 specification, deterministic schema lookup over the parsed XSDs, and curated
+						OPC package metadata—making it much easier to work with Office Open XML.
 					</p>
 				</div>
 			</main>

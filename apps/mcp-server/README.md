@@ -1,9 +1,10 @@
 # OOXML Reference MCP Server
 
-Cloudflare Worker that exposes ECMA-376 (Office Open XML) over the Model Context Protocol. Two tool families share one server:
+Cloudflare Worker that exposes ECMA-376 (Office Open XML) over the Model Context Protocol. Three tool families share one server:
 
 - **Prose search** — semantic search across the four ECMA-376 part PDFs (~18,000 chunks, embedded with Voyage, queried with pgvector).
 - **Schema lookup** — deterministic queries over the parsed XSD graph (profiles, namespaces, symbols, content models, attributes, enums).
+- **Package metadata** — curated OPC part-type reference (content types, source relationship types, root namespaces, typical paths in the package).
 
 Hosted at `https://api.ooxml.dev/mcp`.
 
@@ -68,6 +69,14 @@ Any MCP-compatible client that speaks Streamable HTTP can connect to the endpoin
 | `ooxml_namespace` | Vocabularies and per-profile symbol counts for a namespace URI |
 
 Default profile is `transitional`. Future profiles will compose Transitional with Office extension schemas.
+
+### Package metadata
+
+| Tool | Returns |
+| --- | --- |
+| `ooxml_package_part` | OPC part type by content type, source relationship type, or query substring (Word / Excel / PowerPoint + cross-cutting parts) |
+
+Curated from ECMA-376 Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x. Answers package-level questions the schema graph and prose corpus don't cover (e.g. "what kind of part is `/customXml/item1.xml`?").
 
 ## Development
 

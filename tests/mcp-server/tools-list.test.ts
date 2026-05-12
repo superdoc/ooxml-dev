@@ -21,6 +21,8 @@ const EXPECTED_TOOL_NAMES = [
 	"ooxml_attributes",
 	"ooxml_enum",
 	"ooxml_namespace",
+	// OPC package metadata (over the curated opc-parts dataset)
+	"ooxml_package_part",
 ] as const;
 
 interface JsonRpcResponse {

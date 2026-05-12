@@ -33,7 +33,7 @@ Every page combines XML structure, live rendered previews, and implementation no
 
 ## MCP Server
 
-OOXML reference for AI assistants. Two tool families: prose search across 18,000+ ECMA-376 spec chunks, and deterministic schema lookup over the parsed XSDs.
+OOXML reference for AI assistants. Three tool families: prose search across 18,000+ ECMA-376 spec chunks, deterministic schema lookup over the parsed XSDs, and curated OPC package metadata.
 
 Prose search (over the spec PDFs):
 - `ooxml_search`: Semantic search — ask questions in natural language
@@ -46,6 +46,9 @@ Schema lookup (over the parsed XSDs):
 - `ooxml_attributes`: Attributes including inherited + attributeGroup refs
 - `ooxml_enum`: Enumeration values for a simpleType
 - `ooxml_namespace`: Vocabularies and symbol counts for a namespace URI
+
+Package metadata (curated from ECMA-376 Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x):
+- `ooxml_package_part`: OPC part type by content type, source relationship type, or query substring
 
 ## About
 
