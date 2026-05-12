@@ -108,6 +108,15 @@
       <xsd:element name="shared" type="xsd:string"/>
     </xsd:sequence>
   </xsd:complexType>
+  <!-- Mirrors WML's EG_RPrBase / w:cs case: a local element declared inside
+       a group, typed to a complexType. ooxml_attributes for this element's
+       qname should resolve through the group to the type, returning the
+       type's attributes. -->
+  <xsd:group name="EG_LocalCase">
+    <xsd:choice>
+      <xsd:element name="local_para" type="CT_Para"/>
+    </xsd:choice>
+  </xsd:group>
   <!-- Mirrors WML's *Change types: a complexContent/restriction that
        carries no attribute redeclarations should still inherit the base's
        attribute uses, not silently drop them. -->

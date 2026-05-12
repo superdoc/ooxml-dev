@@ -245,17 +245,18 @@ test("ingest writes compositors and child edges for nested content models", asyn
 	//   CT_BaseWithChildren: sequence -> [ alpha, beta ]
 	//   CT_DerivedExtended: complexContent/extension -> sequence -> [ gamma ]
 	//   CT_NestedOrder:    sequence -> [ head, choice -> [ branchA, branchB ], tail ]
+	//   EG_LocalCase:      choice -> element name="local_para" type="CT_Para"
 	// Compositors: CT_Para(1) + CT_Body(2) + EG_PContent(1) + Base(1) + Derived(1) +
-	// Nested(2) + OuterA(1) + OuterB(1) = 10
-	expect(stats.compositorsInserted).toBe(10);
+	// Nested(2) + OuterA(1) + OuterB(1) + LocalCase(1) = 11
+	expect(stats.compositorsInserted).toBe(11);
 	expect(stats.groupRefsInserted).toBe(1);
 	// Local element symbols are scoped per-owner now, so the two `shared` decls
 	// in CT_OuterA and CT_OuterB count separately.
 	// Per-owner locals: text(CT_Para), break(CT_Body), r(EG_PContent),
 	// alpha+beta(CT_BaseWithChildren), gamma(CT_DerivedExtended),
 	// head+branchA+branchB+tail(CT_NestedOrder), shared(CT_OuterA),
-	// shared(CT_OuterB) = 12.
-	expect(stats.localElementsCreated).toBe(12);
+	// shared(CT_OuterB), local_para(EG_LocalCase) = 13.
+	expect(stats.localElementsCreated).toBe(13);
 	expect(stats.childEdgesUnresolved).toBe(0);
 	expect(stats.groupRefsUnresolved).toBe(0);
 
@@ -601,4 +602,62 @@ test.skipIf(!fullBundleCacheReady)(
 		expect(stats.attrEdgesUnresolved).toBeLessThan(20);
 	},
 	60_000,
+);
+
+test.skipIf(!fullBundleCacheReady)(
+	"ooxml_attributes resolves local elements (w:cs, w:rtl, w:lang, w:dir, w:bdo) against real WML",
+	async () => {
+		// Acceptance criteria for the local-element-resolution PR. These five
+		// elements are declared inline inside EG_RPrBase / EG_ContentRunContent
+		// in the real WML XSD, not as top-level <xsd:element>s. The dispatcher
+		// must follow the local declaration's type_ref and return the type's
+		// attributes - with the "resolved via local element" header so agents
+		// understand what happened.
+		await ingestSchemaSet({
+			schemaDir: REAL_CACHE_DIR,
+			entrypoints: FULL_BUNDLE_ROOTS,
+			profileName: "transitional",
+			sourceName: "ecma-376-transitional",
+			db,
+		});
+
+		const { runOoxmlTool } = await import(
+			"../../apps/mcp-server/src/ooxml-tools.ts"
+		);
+
+		// CT_OnOff cases: val is the only attribute.
+		for (const qname of ["w:cs", "w:rtl"]) {
+			const out = await runOoxmlTool("ooxml_attributes", { qname }, db.sql);
+			expect(out).toContain("resolved via local element");
+			expect(out).toContain("type CT_OnOff");
+			expect(out).toContain("| val |");
+		}
+
+		// CT_Language: val, eastAsia, bidi.
+		const lang = await runOoxmlTool(
+			"ooxml_attributes",
+			{ qname: "w:lang" },
+			db.sql,
+		);
+		expect(lang).toContain("type CT_Language");
+		expect(lang).toContain("| val |");
+		expect(lang).toContain("| eastAsia |");
+		expect(lang).toContain("| bidi |");
+
+		// CT_DirContentRun: val.
+		const dir = await runOoxmlTool("ooxml_attributes", { qname: "w:dir" }, db.sql);
+		expect(dir).toContain("type CT_DirContentRun");
+		expect(dir).toContain("| val |");
+
+		// CT_BdoContentRun: val.
+		const bdo = await runOoxmlTool("ooxml_attributes", { qname: "w:bdo" }, db.sql);
+		expect(bdo).toContain("type CT_BdoContentRun");
+		expect(bdo).toContain("| val |");
+
+		// Suppression: same-namespace local resolution wins, so a cross-vocab
+		// did-you-mean (e.g. r:cs as a relationship attribute) must NOT lead.
+		const cs = await runOoxmlTool("ooxml_attributes", { qname: "w:cs" }, db.sql);
+		expect(cs).not.toContain("Other top-level symbols");
+	},
+	90_000,
 );

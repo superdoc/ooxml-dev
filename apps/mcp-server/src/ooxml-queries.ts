@@ -728,6 +728,25 @@ export interface LocalNameHit {
 }
 
 /**
+ * A local element declaration found inside a parent group / complexType /
+ * other owning symbol. Returned by `findLocalElementsInNamespace` and used
+ * by the attribute/children/element dispatchers to fall back from a
+ * missed top-level lookup to the inline declaration.
+ */
+export interface LocalElementHit {
+	id: number;
+	localName: string;
+	/** Clark-form type ref, e.g. `{ns}CT_OnOff`. May be null for inline complexType. */
+	typeRef: string | null;
+	parentId: number;
+	parentLocalName: string;
+	/** `group`, `complexType`, or `element` (rare). */
+	parentKind: string;
+	vocabularyId: string;
+	namespaceUri: string;
+}
+
+/**
  * Find top-level symbols with this local name across all namespaces in a
  * profile. Used to power "did you mean?" suggestions when an exact lookup
  * misses: e.g. `t` exists as both `w:t` and `a:t`, and an agent asking for
@@ -772,6 +791,58 @@ export async function findLocalNameAcrossNamespaces(
 	return rows.map((r: Record<string, unknown>) => ({
 		localName: r.local_name as string,
 		kind: r.kind as string,
+		vocabularyId: r.vocabulary_id as string,
+		namespaceUri: r.namespace_uri as string,
+	}));
+}
+
+/**
+ * Find local-element declarations (xsd:element name="X" declared inline
+ * inside a complexType, group, or another element) for a given local
+ * name in a single namespace. Used as a fallback when a top-level
+ * `lookupElement` misses: many OOXML elements an agent encounters in
+ * real documents (e.g. `w:cs`, `w:lang` inside `EG_RPrBase`) are local
+ * and so have no global qname identity, but their owning group/type
+ * does, and that's all we need to resolve attributes / children.
+ *
+ * Scoped by namespace on purpose: surfacing local elements from other
+ * vocabularies would noise up the result without helping the agent who
+ * just typed `w:cs`.
+ *
+ * Returns rows in their canonical order (by parent kind, then parent
+ * name) so callers can present "first hit" deterministically.
+ */
+export async function findLocalElementsInNamespace(
+	sql: Sql,
+	localName: string,
+	namespace: string,
+	profile: string,
+): Promise<LocalElementHit[]> {
+	const rows = await sql`
+		SELECT s.id, s.local_name, s.type_ref,
+		       s.parent_symbol_id AS parent_id,
+		       parent.local_name AS parent_local_name,
+		       parent.kind AS parent_kind,
+		       s.vocabulary_id, ns.uri AS namespace_uri
+		FROM xsd_symbols s
+		JOIN xsd_symbols parent ON parent.id = s.parent_symbol_id
+		JOIN xsd_symbol_profiles sp ON sp.symbol_id = s.id
+		JOIN xsd_namespaces ns ON ns.id = sp.namespace_id
+		JOIN xsd_profiles p ON p.id = sp.profile_id
+		WHERE s.local_name = ${localName}
+		  AND s.kind = 'element'
+		  AND s.parent_symbol_id IS NOT NULL
+		  AND ns.uri = ${namespace}
+		  AND p.name = ${profile}
+		ORDER BY parent.kind, parent.local_name
+	`;
+	return rows.map((r: Record<string, unknown>) => ({
+		id: r.id as number,
+		localName: r.local_name as string,
+		typeRef: r.type_ref as string | null,
+		parentId: r.parent_id as number,
+		parentLocalName: r.parent_local_name as string,
+		parentKind: r.parent_kind as string,
 		vocabularyId: r.vocabulary_id as string,
 		namespaceUri: r.namespace_uri as string,
 	}));

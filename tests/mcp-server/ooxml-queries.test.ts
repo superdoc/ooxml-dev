@@ -8,6 +8,7 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createDbClient, type DbClient } from "../../packages/shared/src/db/index.ts";
 import { ingestSchemaSet } from "../../scripts/ingest-xsd/ingest.ts";
 import {
+	findLocalElementsInNamespace,
 	findLocalNameAcrossNamespaces,
 	getAttributes,
 	getChildren,
@@ -512,4 +513,133 @@ test("ooxml_type: not-found shows 'Other top-level symbols' when only an element
 	expect(out).toContain("Not found: type document");
 	expect(out).toContain("Other top-level symbols named `document`");
 	expect(out).toContain("element `document` in wml-main");
+});
+
+// --- Local element resolution -------------------------------------------
+
+test("findLocalElementsInNamespace: scoped to namespace and excludes top-level", async () => {
+	// `text` is locally declared inline inside CT_Para. lookupElement filters
+	// it out (parent_symbol_id IS NULL); this helper returns it with parent
+	// context so the dispatcher can resolve its declared type.
+	const hits = await findLocalElementsInNamespace(db.sql, "text", WML_NS, "transitional");
+	expect(hits).toHaveLength(1);
+	expect(hits[0].parentLocalName).toBe("CT_Para");
+	expect(hits[0].parentKind).toBe("complexType");
+	expect(hits[0].typeRef).toBe("{http://www.w3.org/2001/XMLSchema}string");
+
+	// Scoped by namespace: `text` is WML-only in fixtures.
+	const wrongNs = await findLocalElementsInNamespace(db.sql, "text", SHARED_NS, "transitional");
+	expect(wrongNs).toHaveLength(0);
+
+	// Top-level elements aren't returned by this helper.
+	const topLevel = await findLocalElementsInNamespace(db.sql, "document", WML_NS, "transitional");
+	expect(topLevel).toHaveLength(0);
+});
+
+test("findLocalElementsInNamespace: ambiguous case returns one hit per parent with own type_ref", async () => {
+	// Fixture: `shared` is locally declared in CT_OuterA (type ST_Jc) and
+	// CT_OuterB (type xsd:string). Both rows must come back with their own
+	// type_ref so the dispatcher can choose disambiguation over guessing.
+	const hits = await findLocalElementsInNamespace(db.sql, "shared", WML_NS, "transitional");
+	expect(hits).toHaveLength(2);
+	const byParent = Object.fromEntries(hits.map((h) => [h.parentLocalName, h.typeRef]));
+	expect(byParent.CT_OuterA).toBe(`{${WML_NS}}ST_Jc`);
+	expect(byParent.CT_OuterB).toBe("{http://www.w3.org/2001/XMLSchema}string");
+});
+
+test("findLocalElementsInNamespace: local element inside a group", async () => {
+	// Fixture: `local_para` is declared inline inside EG_LocalCase (group),
+	// typed CT_Para. The dispatcher needs this to resolve attributes /
+	// children via the declared complexType - the WML w:cs / EG_RPrBase
+	// shape.
+	const hits = await findLocalElementsInNamespace(db.sql, "local_para", WML_NS, "transitional");
+	expect(hits).toHaveLength(1);
+	expect(hits[0].parentKind).toBe("group");
+	expect(hits[0].parentLocalName).toBe("EG_LocalCase");
+	expect(hits[0].typeRef).toBe(`{${WML_NS}}CT_Para`);
+});
+
+test("ooxml_attributes: resolves through local element to declared type (single match)", async () => {
+	// w:local_para is a local element typed CT_Para; CT_Para has the `bold`
+	// attribute. The dispatcher should follow the type_ref and return CT_Para's
+	// attributes with a "resolved via local element" header.
+	const out = await runOoxmlTool(
+		"ooxml_attributes",
+		{ qname: "w:local_para" },
+		db.sql,
+	);
+	expect(out).toContain("resolved via local element");
+	expect(out).toContain("group `EG_LocalCase`");
+	expect(out).toContain("type CT_Para");
+	// CT_Para's bold attribute is present in the body.
+	expect(out).toContain("| bold |");
+});
+
+test("ooxml_children: resolves through local element to declared type (single match)", async () => {
+	// Same w:local_para → CT_Para. CT_Para has the inline `text` element as
+	// its only child.
+	const out = await runOoxmlTool(
+		"ooxml_children",
+		{ qname: "w:local_para" },
+		db.sql,
+	);
+	expect(out).toContain("resolved via local element");
+	expect(out).toContain("group `EG_LocalCase`");
+	expect(out).toContain("| text |");
+});
+
+test("ooxml_attributes: ambiguous local declarations return a disambiguation, not a guess", async () => {
+	// Fixture: `shared` is declared in CT_OuterA (ST_Jc) and CT_OuterB
+	// (xsd:string). The dispatcher must refuse to pick one and instead list
+	// both with their owning type, so the agent can drive the next call.
+	const out = await runOoxmlTool("ooxml_attributes", { qname: "w:shared" }, db.sql);
+	expect(out).toContain("Ambiguous local element `shared`");
+	expect(out).toContain("CT_OuterA");
+	expect(out).toContain("CT_OuterB");
+	// The disambiguation must not also surface a cross-vocab "Other top-level
+	// symbols" block - same-namespace local candidates win.
+	expect(out).not.toContain("Other top-level symbols");
+});
+
+test("ooxml_element: returns a local-element report, not a fake global Element", async () => {
+	// w:local_para has no global Element entry. ooxml_element should report
+	// it as a local declaration with parent + type_ref, without using the
+	// "Element:" heading that implies a top-level symbol.
+	const out = await runOoxmlTool("ooxml_element", { qname: "w:local_para" }, db.sql);
+	expect(out).toContain("## Local element: local_para");
+	expect(out).toContain("group `EG_LocalCase`");
+	expect(out).toContain("type_ref:");
+	// Should NOT use the global Element heading.
+	expect(out).not.toContain("## Element: local_para");
+});
+
+test("ooxml_element: ambiguous local declarations use the disambiguation report, not 'primary + alts'", async () => {
+	// w:shared is locally declared in CT_OuterA (ST_Jc) and CT_OuterB
+	// (xsd:string). Promoting the first hit as the primary type would mislead
+	// agents; the dispatcher must instead use the ambiguous report (same
+	// behavior as ooxml_attributes / ooxml_children) so neither declaration
+	// is implied to be canonical.
+	const out = await runOoxmlTool("ooxml_element", { qname: "w:shared" }, db.sql);
+	expect(out).toContain("Ambiguous local element `shared`");
+	expect(out).toContain("CT_OuterA");
+	expect(out).toContain("CT_OuterB");
+	// Must not render the "Local element: shared" single-resolution heading.
+	expect(out).not.toContain("## Local element: shared");
+	// And no "primary + alts" framing - if one were promoted, that would
+	// surface as an "Also declared in N other context(s)" footer.
+	expect(out).not.toContain("Also declared in");
+});
+
+test("ooxml_attributes: same-namespace local match suppresses cross-vocab did-you-mean", async () => {
+	// w:local_para resolves through a local declaration. Even if a same-named
+	// symbol existed in another vocab, the local resolution should win and
+	// the "Other top-level symbols" did-you-mean block should not appear.
+	const out = await runOoxmlTool(
+		"ooxml_attributes",
+		{ qname: "w:local_para" },
+		db.sql,
+	);
+	expect(out).not.toContain("Other top-level symbols");
+	// And we did get the genuine resolution.
+	expect(out).toContain("| bold |");
 });
