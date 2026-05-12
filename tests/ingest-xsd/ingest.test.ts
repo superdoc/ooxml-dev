@@ -521,3 +521,75 @@ test.skipIf(!realCacheReady)(
 	},
 	30_000,
 );
+
+test.skipIf(!realCacheReady)(
+	"smoke: ingest the full Transitional bundle via default entrypoints",
+	async () => {
+		// Default entrypoint list (9 roots) is the union closure of the 26
+		// Transitional XSDs. Calling ingestSchemaSet directly with the same
+		// list verifies the closure resolves to 26 documents and that the
+		// previously-unreached namespaces (customXml, SML, PML, VML, doc-prop
+		// shareds) actually contribute symbols.
+		const stats = await ingestSchemaSet({
+			schemaDir: REAL_CACHE_DIR,
+			entrypoints: [
+				"wml.xsd",
+				"sml.xsd",
+				"pml.xsd",
+				"vml-main.xsd",
+				"shared-additionalCharacteristics.xsd",
+				"shared-bibliography.xsd",
+				"shared-customXmlDataProperties.xsd",
+				"shared-documentPropertiesCustom.xsd",
+				"shared-documentPropertiesExtended.xsd",
+			],
+			profileName: "transitional",
+			sourceName: "ecma-376-transitional",
+			db,
+		});
+
+		expect(stats.documents).toBe(26);
+		// WML alone landed >1300 symbols; the full bundle is materially larger.
+		expect(stats.symbolsInserted).toBeGreaterThan(3500);
+
+		// ds:datastoreItem - the motivating case. Lives in shared-customXml.
+		const datastoreItem = await db.sql`
+			SELECT s.local_name, s.kind, ns.uri AS namespace_uri
+			FROM xsd_symbols s
+			JOIN xsd_symbol_profiles sp ON sp.symbol_id = s.id
+			JOIN xsd_namespaces ns ON ns.id = sp.namespace_id
+			WHERE s.local_name = 'datastoreItem' AND s.kind = 'element'
+		`;
+		expect(datastoreItem).toHaveLength(1);
+		expect(datastoreItem[0].namespace_uri).toBe(
+			"http://schemas.openxmlformats.org/officeDocument/2006/customXml",
+		);
+
+		// SML / PML top-level elements should also be present.
+		const sml = await db.sql`
+			SELECT s.local_name FROM xsd_symbols s
+			JOIN xsd_symbol_profiles sp ON sp.symbol_id = s.id
+			WHERE s.vocabulary_id = 'sml-main' AND s.kind = 'element' AND s.parent_symbol_id IS NULL
+		`;
+		expect(sml.length).toBeGreaterThan(0);
+
+		const pml = await db.sql`
+			SELECT s.local_name FROM xsd_symbols s
+			JOIN xsd_symbol_profiles sp ON sp.symbol_id = s.id
+			WHERE s.vocabulary_id = 'pml-main' AND s.kind = 'element' AND s.parent_symbol_id IS NULL
+		`;
+		expect(pml.length).toBeGreaterThan(0);
+
+		// Same overall sanity floors as the WML-only test: nothing should be
+		// left unresolved after the broader ingest. Regression guard against
+		// import-closure gaps.
+		expect(stats.childEdgesUnresolved).toBe(0);
+		expect(stats.groupRefsUnresolved).toBe(0);
+		expect(stats.attrGroupRefsUnresolved).toBe(0);
+		// xml:space / xml:lang and a handful of other xml-namespace attrs are
+		// still expected to be unresolved (we don't ingest the xml namespace
+		// XSD); the floor is loose to absorb that.
+		expect(stats.attrEdgesUnresolved).toBeLessThan(20);
+	},
+	60_000,
+);
