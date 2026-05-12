@@ -1130,6 +1130,41 @@ interface CliArgs {
 	sourceName: string;
 }
 
+/**
+ * Default entrypoints for the ECMA-376 Transitional XSD bundle.
+ *
+ * Union closure of these 9 files covers all 26 .xsd files in the bundle.
+ * Picked as a minimal explicit list rather than a glob so a stray file in
+ * data/xsd-cache/ (download cruft, intermediate artifacts) can't sneak
+ * into the ingest. Each entry is here because it's either a top-level
+ * vocabulary or a root that's never imported by another XSD in the set.
+ *
+ *   wml.xsd                              WML + dml-wp + drawingML closure
+ *   sml.xsd                              SML + dml-spreadsheetDrawing
+ *   pml.xsd                              PML
+ *   vml-main.xsd                         all 5 VML files (chains imports)
+ *   shared-additionalCharacteristics.xsd standalone, no importers
+ *   shared-bibliography.xsd              standalone, no importers
+ *   shared-customXmlDataProperties.xsd   standalone; targets .../customXml
+ *                                        (motivating case for ds:datastoreItem)
+ *   shared-documentPropertiesCustom.xsd  pulls in shared-docPropsVTypes
+ *   shared-documentPropertiesExtended.xsd
+ *
+ * shared-customXmlSchemaProperties.xsd / shared-math.xsd / shared-rel.xsd /
+ * shared-commonSimpleTypes.xsd are reached transitively by the above.
+ */
+const DEFAULT_ENTRYPOINTS = [
+	"wml.xsd",
+	"sml.xsd",
+	"pml.xsd",
+	"vml-main.xsd",
+	"shared-additionalCharacteristics.xsd",
+	"shared-bibliography.xsd",
+	"shared-customXmlDataProperties.xsd",
+	"shared-documentPropertiesCustom.xsd",
+	"shared-documentPropertiesExtended.xsd",
+];
+
 function parseCliArgs(): CliArgs {
 	const argv = process.argv.slice(2);
 	let schemaDir = "./data/xsd-cache/ecma-376-transitional";
@@ -1143,7 +1178,7 @@ function parseCliArgs(): CliArgs {
 		else if (a === "--profile") profileName = argv[++i] ?? profileName;
 		else if (a === "--source") sourceName = argv[++i] ?? sourceName;
 	}
-	if (entrypoints.length === 0) entrypoints.push("wml.xsd");
+	if (entrypoints.length === 0) entrypoints.push(...DEFAULT_ENTRYPOINTS);
 	return { schemaDir, entrypoints, profileName, sourceName };
 }
 
