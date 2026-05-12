@@ -54,10 +54,11 @@ url = "https://api.ooxml.dev/mcp"
 }
 ```
 
-Two tool families share one server:
+Three tool families share one server:
 
 - **Prose search** (over the spec PDFs): `ooxml_search`, `ooxml_section`, `ooxml_parts`
 - **Schema lookup** (over the parsed XSDs): `ooxml_element`, `ooxml_type`, `ooxml_children`, `ooxml_attributes`, `ooxml_enum`, `ooxml_namespace`
+- **Package metadata** (curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x): `ooxml_package_part`
 
 ## Development
 

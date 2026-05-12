@@ -104,7 +104,7 @@ The XML you provide is wrapped in a minimal `w:document > w:body` structure auto
 
 ## MCP Server
 
-Cloudflare Worker exposing two tool families over MCP, backed by the same database.
+Cloudflare Worker exposing three tool families over MCP. Prose and schema-lookup tools are backed by the database; package-metadata tool reads a curated static dataset bundled with the worker.
 
 Prose search over the spec PDFs (powered by `spec_content`):
 
@@ -119,6 +119,10 @@ Structural queries over the XSD schema graph (powered by `xsd_*` tables):
 - `ooxml_attributes` - attributes including those inherited and unfolded from attributeGroup refs
 - `ooxml_enum` - simpleType enumeration values
 - `ooxml_namespace` - vocabularies and per-profile symbol counts for a namespace URI
+
+OPC package metadata (powered by the curated `opc-parts.ts` dataset):
+
+- `ooxml_package_part` - part-type info by content type, source relationship type, or query substring
 
 Uses PostgreSQL with pgvector (Neon serverless in production, Docker locally).
 
