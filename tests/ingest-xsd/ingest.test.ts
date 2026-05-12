@@ -13,7 +13,26 @@ import { createDbClient, type DbClient } from "../../packages/shared/src/db/inde
 
 const FIXTURES_DIR = join(import.meta.dir, "fixtures");
 const REAL_CACHE_DIR = "./data/xsd-cache/ecma-376-transitional";
+
+// The WML-only smoke test just needs wml.xsd + its import closure on disk.
+// The full-bundle test needs all 9 default entrypoints; partial caches
+// (e.g. someone fetched a subset for hand-testing) must skip it cleanly
+// instead of failing in readFile.
 const realCacheReady = existsSync(join(REAL_CACHE_DIR, "wml.xsd"));
+const FULL_BUNDLE_ROOTS = [
+	"wml.xsd",
+	"sml.xsd",
+	"pml.xsd",
+	"vml-main.xsd",
+	"shared-additionalCharacteristics.xsd",
+	"shared-bibliography.xsd",
+	"shared-customXmlDataProperties.xsd",
+	"shared-documentPropertiesCustom.xsd",
+	"shared-documentPropertiesExtended.xsd",
+];
+const fullBundleCacheReady = FULL_BUNDLE_ROOTS.every((f) =>
+	existsSync(join(REAL_CACHE_DIR, f)),
+);
 
 import { getTestDatabaseUrl } from "../test-db.ts";
 
@@ -522,7 +541,7 @@ test.skipIf(!realCacheReady)(
 	30_000,
 );
 
-test.skipIf(!realCacheReady)(
+test.skipIf(!fullBundleCacheReady)(
 	"smoke: ingest the full Transitional bundle via default entrypoints",
 	async () => {
 		// Default entrypoint list (9 roots) is the union closure of the 26
@@ -532,17 +551,7 @@ test.skipIf(!realCacheReady)(
 		// shareds) actually contribute symbols.
 		const stats = await ingestSchemaSet({
 			schemaDir: REAL_CACHE_DIR,
-			entrypoints: [
-				"wml.xsd",
-				"sml.xsd",
-				"pml.xsd",
-				"vml-main.xsd",
-				"shared-additionalCharacteristics.xsd",
-				"shared-bibliography.xsd",
-				"shared-customXmlDataProperties.xsd",
-				"shared-documentPropertiesCustom.xsd",
-				"shared-documentPropertiesExtended.xsd",
-			],
+			entrypoints: FULL_BUNDLE_ROOTS,
 			profileName: "transitional",
 			sourceName: "ecma-376-transitional",
 			db,

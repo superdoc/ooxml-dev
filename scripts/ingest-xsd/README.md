@@ -46,16 +46,21 @@ bun run xsd:fetch -- --expected-sha256 <hex>            # override hash
 bun run xsd:ingest
 ```
 
-By default it walks `wml.xsd` plus its import closure (12 documents) and
-populates: `xsd_profiles`, `xsd_namespaces`, `xsd_symbols`,
-`xsd_symbol_profiles`, `xsd_inheritance_edges`, `xsd_compositors`,
-`xsd_child_edges`, `xsd_group_edges`, `xsd_attr_edges`, `xsd_enums`. Wraps
-the whole thing in a single transaction; idempotent across runs.
+By default it walks 9 roots whose union closure covers all 26 XSDs in
+the Transitional bundle (`wml.xsd`, `sml.xsd`, `pml.xsd`, `vml-main.xsd`,
+and the standalone shared schemas for additionalCharacteristics,
+bibliography, customXmlDataProperties, documentPropertiesCustom, and
+documentPropertiesExtended). Populates: `xsd_profiles`, `xsd_namespaces`,
+`xsd_symbols`, `xsd_symbol_profiles`, `xsd_inheritance_edges`,
+`xsd_compositors`, `xsd_child_edges`, `xsd_group_edges`, `xsd_attr_edges`,
+`xsd_enums`. Wraps the whole thing in a single transaction; idempotent
+across runs.
 
-To ingest a different working set:
+To ingest a narrower working set (overrides the default list):
 
 ```bash
-bun run xsd:ingest --entrypoint dml-main.xsd
+bun run xsd:ingest --entrypoint wml.xsd                       # WML only
+bun run xsd:ingest --entrypoint sml.xsd --entrypoint pml.xsd  # SML + PML
 bun run xsd:ingest --schema-dir <path> --entrypoint <file> \
                    --profile <name> --source <reference_sources.name>
 ```
