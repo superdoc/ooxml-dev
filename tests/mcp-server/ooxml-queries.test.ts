@@ -613,6 +613,23 @@ test("ooxml_element: returns a local-element report, not a fake global Element",
 	expect(out).not.toContain("## Element: local_para");
 });
 
+test("ooxml_element: ambiguous local declarations use the disambiguation report, not 'primary + alts'", async () => {
+	// w:shared is locally declared in CT_OuterA (ST_Jc) and CT_OuterB
+	// (xsd:string). Promoting the first hit as the primary type would mislead
+	// agents; the dispatcher must instead use the ambiguous report (same
+	// behavior as ooxml_attributes / ooxml_children) so neither declaration
+	// is implied to be canonical.
+	const out = await runOoxmlTool("ooxml_element", { qname: "w:shared" }, db.sql);
+	expect(out).toContain("Ambiguous local element `shared`");
+	expect(out).toContain("CT_OuterA");
+	expect(out).toContain("CT_OuterB");
+	// Must not render the "Local element: shared" single-resolution heading.
+	expect(out).not.toContain("## Local element: shared");
+	// And no "primary + alts" framing - if one were promoted, that would
+	// surface as an "Also declared in N other context(s)" footer.
+	expect(out).not.toContain("Also declared in");
+});
+
 test("ooxml_attributes: same-namespace local match suppresses cross-vocab did-you-mean", async () => {
 	// w:local_para resolves through a local declaration. Even if a same-named
 	// symbol existed in another vocab, the local resolution should win and

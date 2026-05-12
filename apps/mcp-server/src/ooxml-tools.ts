@@ -218,19 +218,16 @@ export async function runOoxmlTool(
 			if (!q.ok) return formatNotFound(`could not parse qname: ${q.reason}`);
 			const hit = await lookupElement(sql, q.qname.namespace, q.qname.localName, profile);
 			if (!hit) {
-				// No global element. Look for local-element declarations in the
-				// same namespace; they're how OOXML expresses things like
-				// w:cs, w:lang, w:bdo etc. and the report can name the owning
-				// group/complexType plus the declared type honestly without
-				// pretending it's a top-level Element.
-				const locals = await findLocalElementsInNamespace(
-					sql,
-					q.qname.localName,
-					q.qname.namespace,
-					profile,
-				);
-				if (locals.length > 0) {
-					return formatLocalElementReport(q.qname, locals, profile);
+				// No global element. Apply the same single/ambiguous policy as
+				// ooxml_attributes / ooxml_children so an element name with
+				// disagreeing local declarations (the tblGrid case) doesn't
+				// promote locals[0] as the answer.
+				const local = await resolveLocalElement(sql, q.qname, profile);
+				if (local.kind === "single") {
+					return formatLocalElementReport(q.qname, local.first, local.locals, profile);
+				}
+				if (local.kind === "ambiguous") {
+					return formatLocalElementAmbiguous(q.qname, local.locals);
 				}
 				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile, {
 					kind: "element",
@@ -750,17 +747,21 @@ async function resolveLocalElement(
 	const locals = await findLocalElementsInNamespace(sql, qname.localName, qname.namespace, profile);
 	if (locals.length === 0) return { kind: "none" };
 
-	const typeRefs = new Set(locals.map((l) => l.typeRef).filter((t): t is string => !!t));
-	if (typeRefs.size === 1) {
-		const [typeRef] = typeRefs;
-		const typeSym = await lookupSymbolByTypeRef(sql, typeRef, profile);
+	// "Single" requires every local hit to share the same non-null type_ref.
+	// A mix of typed and inline-typed (null type_ref) declarations - even if
+	// the typed ones agree - is genuinely ambiguous: the inline declaration
+	// has its own content model that the type symbol can't represent. Don't
+	// silently filter nulls out.
+	const firstRef = locals[0].typeRef;
+	if (firstRef && locals.every((l) => l.typeRef === firstRef)) {
+		const typeSym = await lookupSymbolByTypeRef(sql, firstRef, profile);
 		if (typeSym) {
 			return { kind: "single", typeSym, first: locals[0], locals };
 		}
 	}
-	// Either multiple distinct type_refs, or the single one didn't resolve
-	// (rare; would mean a dangling reference). Either way, surface the
-	// declarations and let the caller decide.
+	// Either multiple distinct type_refs, at least one null type_ref alongside
+	// a typed one, or the single type_ref didn't resolve (dangling). Surface
+	// every declaration and let the caller pick.
 	return { kind: "ambiguous", locals };
 }
 
@@ -789,11 +790,16 @@ function formatLocalElementAmbiguous(
 
 function formatLocalElementReport(
 	qname: { namespace: string; localName: string },
+	first: LocalElementHit,
 	locals: LocalElementHit[],
 	profile: string,
 ): string {
+	// Invariant: callers only reach here via `resolveLocalElement` returning
+	// `single`, which means every entry in `locals` shares `first.typeRef`.
+	// The ambiguous case takes a different code path
+	// (formatLocalElementAmbiguous), so "also declared" here doesn't risk
+	// implying agreement that doesn't exist.
 	const lines: string[] = [];
-	const first = locals[0];
 	lines.push(`## Local element: ${first.localName}`);
 	lines.push("");
 	lines.push(
@@ -806,11 +812,9 @@ function formatLocalElementReport(
 	if (first.typeRef) lines.push(`- type_ref: ${first.typeRef}`);
 	lines.push("");
 	if (locals.length > 1) {
-		lines.push(`Also declared in ${locals.length - 1} other local context(s):`);
+		lines.push(`Also declared in ${locals.length - 1} other local context(s) with the same type:`);
 		for (const l of locals.slice(1)) {
-			lines.push(
-				`- ${l.parentKind} \`${l.parentLocalName}\` (type_ref: ${l.typeRef ?? "_(none)_"})`,
-			);
+			lines.push(`- ${l.parentKind} \`${l.parentLocalName}\``);
 		}
 	}
 	return lines.join("\n");
