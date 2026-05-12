@@ -15,10 +15,14 @@ import {
 	type AttrEntry,
 	type ChildEdge,
 	type EnumEntry,
+	findLocalNameAcrossNamespaces,
 	getAttributes,
 	getChildren,
 	getEnums,
 	getNamespaceInfo,
+	knownPrefixes,
+	type LocalNameHit,
+	listNamespaces,
 	lookupElement,
 	lookupSymbol,
 	lookupSymbolByTypeRef,
@@ -34,11 +38,15 @@ export interface OoxmlEnv {
 	DATABASE_URL: string;
 }
 
+const QNAME_HELP =
+	"Accepts 'w:tbl', '{namespace}localName' (Clark form), or bare 'localName' (defaults to wml-main). " +
+	"Backed by the XSD schema graph: elements documented only in spec prose (Part 1 §15.x package parts, " +
+	"some appendix tables) won't resolve here. Fall back to ooxml_search or ooxml_section for prose lookups.";
+
 export const OOXML_TOOL_DEFS: ToolDef[] = [
 	{
 		name: "ooxml_element",
-		description:
-			"Look up an OOXML element by qname in a profile. Returns canonical symbol info (vocabulary, namespace, declared @type, profile membership, source). Accepts 'w:tbl', '{namespace}localName' (Clark form), or bare 'localName' (defaults to wml-main).",
+		description: `Look up an OOXML element by qname in a profile. Returns canonical symbol info (vocabulary, namespace, declared @type, profile membership, source). ${QNAME_HELP}`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -53,8 +61,7 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 	},
 	{
 		name: "ooxml_type",
-		description:
-			"Look up a complexType or simpleType by qname in a profile. Tries complexType first, then simpleType.",
+		description: `Look up a complexType or simpleType by qname in a profile. Tries complexType first, then simpleType. ${QNAME_HELP}`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -66,8 +73,7 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 	},
 	{
 		name: "ooxml_children",
-		description:
-			"List the legal children of an element or complexType in document order. For an element, follows @type to its complexType first. Walks inheritance to union content from base types. Group refs are surfaced as-is; resolve them by calling ooxml_children on the group qname.",
+		description: `List the legal children of an element or complexType in document order. For an element, follows @type to its complexType first. Walks inheritance to union content from base types. Group refs are surfaced as-is; resolve them by calling ooxml_children on the group qname. ${QNAME_HELP}`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -83,8 +89,7 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 	},
 	{
 		name: "ooxml_attributes",
-		description:
-			"List the attributes of an element or complexType. For an element, follows @type to its complexType first. Walks inheritance and unfolds attributeGroup refs recursively. Each entry includes use (required/optional/prohibited), default, fixed, and type_ref.",
+		description: `List the attributes of an element or complexType. For an element, follows @type to its complexType first. Walks inheritance and unfolds attributeGroup refs recursively. Each entry includes use (required/optional/prohibited), default, fixed, and type_ref. ${QNAME_HELP}`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -96,8 +101,7 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 	},
 	{
 		name: "ooxml_enum",
-		description:
-			"List enumeration values for a simpleType. Pass the simpleType qname (e.g. 'w:ST_Jc' or 'ST_Jc') and get back the values in declaration order.",
+		description: `List enumeration values for a simpleType. Pass the simpleType qname (e.g. 'w:ST_Jc' or 'ST_Jc') and get back the values in declaration order. ${QNAME_HELP}`,
 		inputSchema: {
 			type: "object" as const,
 			properties: {
@@ -110,13 +114,20 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 	{
 		name: "ooxml_namespace",
 		description:
-			"Show what's known about a namespace URI: vocabularies, profiles that include it, and how many symbols each profile contributes.",
+			"Inspect or discover namespaces in the schema graph. Three modes: " +
+			"(1) `uri` exact match → full report (vocabularies, per-profile symbol counts); " +
+			"(2) `query` substring (case-insensitive, e.g. 'drawingml' or 'customXml') → list of matching namespaces; " +
+			"(3) no args → list every ingested namespace. Note the schema-graph URI for a namespace can differ from the URI used in spec prose (e.g. custom XML data storage); the schema-graph URI is what this tool keys on.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
-				uri: { type: "string", description: "Namespace URI." },
+				uri: { type: "string", description: "Exact namespace URI to look up." },
+				query: {
+					type: "string",
+					description:
+						"Case-insensitive substring to match against namespace URIs. Use when you don't have the exact URI.",
+				},
 			},
-			required: ["uri"],
 		},
 	},
 ];
@@ -170,9 +181,13 @@ export async function runOoxmlTool(
 			if (!q.ok) return formatNotFound(`could not parse qname: ${q.reason}`);
 			const hit = await lookupElement(sql, q.qname.namespace, q.qname.localName, profile);
 			if (!hit) {
+				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile, {
+					kind: "element",
+				});
 				return formatNotFound(
 					`element ${q.qname.localName} in namespace ${q.qname.namespace}`,
 					profile,
+					{ localName: q.qname.localName, alternatives: alts },
 				);
 			}
 			return formatSymbolReport("Element", hit, profile);
@@ -183,9 +198,11 @@ export async function runOoxmlTool(
 			if (!q.ok) return formatNotFound(`could not parse qname: ${q.reason}`);
 			const hit = await lookupType(sql, q.qname.namespace, q.qname.localName, profile);
 			if (!hit) {
+				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile);
 				return formatNotFound(
 					`type ${q.qname.localName} in namespace ${q.qname.namespace}`,
 					profile,
+					{ localName: q.qname.localName, alternatives: alts },
 				);
 			}
 			return formatSymbolReport(
@@ -212,9 +229,11 @@ export async function runOoxmlTool(
 				}
 			}
 			if (!typeSym) {
+				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile);
 				return formatNotFound(
 					`children for ${q.qname.localName} in namespace ${q.qname.namespace}`,
 					profile,
+					{ localName: q.qname.localName, alternatives: alts },
 				);
 			}
 			const children = await getChildren(sql, typeSym.id, profile);
@@ -233,9 +252,11 @@ export async function runOoxmlTool(
 				}
 			}
 			if (!typeSym) {
+				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile);
 				return formatNotFound(
 					`attributes for ${q.qname.localName} in namespace ${q.qname.namespace}`,
 					profile,
+					{ localName: q.qname.localName, alternatives: alts },
 				);
 			}
 			const attrs = await getAttributes(sql, typeSym.id, profile);
@@ -247,9 +268,13 @@ export async function runOoxmlTool(
 			if (!q.ok) return formatNotFound(`could not parse qname: ${q.reason}`);
 			const sym = await lookupType(sql, q.qname.namespace, q.qname.localName, profile);
 			if (!sym || sym.kind !== "simpleType") {
+				const alts = await findLocalNameAcrossNamespaces(sql, q.qname.localName, profile, {
+					kind: "simpleType",
+				});
 				return formatNotFound(
 					`simpleType ${q.qname.localName} in namespace ${q.qname.namespace}`,
 					profile,
+					{ localName: q.qname.localName, alternatives: alts },
 				);
 			}
 			const enums = await getEnums(sql, sym.id, profile);
@@ -257,11 +282,40 @@ export async function runOoxmlTool(
 		}
 
 		case "ooxml_namespace": {
-			const uri = String(args.uri ?? "");
-			if (!uri) return formatNotFound("namespace URI not provided");
-			const info = await getNamespaceInfo(sql, uri);
-			if (!info) return formatNotFound(`namespace URI '${uri}' not present in any profile`);
-			return formatNamespaceReport(info);
+			const uri = typeof args.uri === "string" ? args.uri.trim() : "";
+			const query = typeof args.query === "string" ? args.query.trim() : "";
+
+			if (uri) {
+				const info = await getNamespaceInfo(sql, uri);
+				if (info) return formatNamespaceReport(info);
+
+				// On exact miss, retry with the URI's last path segment as a
+				// substring. This catches near-misses (trailing slash, version
+				// drift) but is honest about its limits: spec-prose URIs that
+				// don't share any literal substring with the XSD URI (e.g.
+				// .../customXmlDataProps vs .../customXml) won't match here.
+				// That bridge requires an explicit alias table, tracked
+				// separately.
+				const lastSegment = uri.replace(/\/+$/, "").split("/").pop() ?? "";
+				const fallbackQuery = lastSegment.length >= 3 ? lastSegment : "";
+				const matches = fallbackQuery ? await listNamespaces(sql, { query: fallbackQuery }) : [];
+				return formatNamespaceList(matches, {
+					title: `Namespace URI '${uri}' not found exactly`,
+					note: matches.length
+						? `Showing substring matches for '${fallbackQuery}'. No alias resolution between spec-prose URIs and XSD URIs is in place yet.`
+						: "No near-matches by URI substring, and no alias resolution between spec-prose URIs and XSD URIs is in place yet. Try `ooxml_search` for prose references, or call `ooxml_namespace` with no args to list every ingested namespace.",
+				});
+			}
+
+			const matches = await listNamespaces(sql, query ? { query } : {});
+			return formatNamespaceList(matches, {
+				title: query ? `Namespaces matching '${query}'` : "Ingested namespaces",
+				note: matches.length
+					? undefined
+					: query
+						? "No matches. Try `ooxml_search` for prose references or call this tool with no args to see every ingested namespace."
+						: "No namespaces ingested. Run `bun run xsd:ingest`.",
+			});
 		}
 
 		default: {
@@ -396,14 +450,71 @@ function formatNamespaceReport(info: NamespaceInfo): string {
 	return lines.join("\n");
 }
 
-function formatNotFound(what: string, profile?: string): string {
+function formatNamespaceList(
+	matches: NamespaceInfo[],
+	opts: { title: string; note?: string },
+): string {
+	const lines: string[] = [];
+	lines.push(`## ${opts.title}`);
+	lines.push("");
+	if (matches.length === 0) {
+		lines.push("_(no matches)_");
+		if (opts.note) {
+			lines.push("");
+			lines.push(opts.note);
+		}
+		return lines.join("\n");
+	}
+	lines.push("| uri | vocabularies | profiles |");
+	lines.push("| --- | --- | --- |");
+	for (const m of matches) {
+		const vocabs = m.vocabularies.join(", ") || "(none)";
+		const profiles = m.profiles.map((p) => `${p.name} (${p.symbolCount})`).join(", ") || "(none)";
+		lines.push(`| \`${m.uri}\` | ${vocabs} | ${profiles} |`);
+	}
+	if (opts.note) {
+		lines.push("");
+		lines.push(opts.note);
+	}
+	return lines.join("\n");
+}
+
+interface NotFoundExtras {
+	localName?: string;
+	alternatives?: LocalNameHit[];
+}
+
+function formatNotFound(what: string, profile?: string, extras?: NotFoundExtras): string {
 	const lines: string[] = [];
 	lines.push(`## Not found: ${what}`);
 	if (profile) lines.push(`Searched in profile '${profile}'.`);
 	lines.push("");
+
+	const alts = extras?.alternatives ?? [];
+	if (alts.length > 0 && extras?.localName) {
+		// "alternatives" may include the same vocabulary with a different kind
+		// (e.g. asking for type `w:document` when only element `w:document`
+		// exists). All such hits are useful disambiguation context, so we
+		// surface them under a neutral label rather than claiming they live in
+		// "other vocabularies".
+		lines.push(`Other top-level symbols named \`${extras.localName}\`:`);
+		for (const a of alts) {
+			lines.push(`- ${a.kind} \`${a.localName}\` in ${a.vocabularyId} (${a.namespaceUri})`);
+		}
+		lines.push("");
+		lines.push("Disambiguate with a prefix, Clark-form namespace, or different kind.");
+		lines.push("");
+	}
+
 	lines.push("Try one of:");
-	lines.push("- a known prefix qname like `w:tbl`, `r:id`, `s:ST_OnOff`, `m:oMath`, `a:blip`");
+	lines.push(
+		`- a known prefix qname (${knownPrefixes().slice(0, 10).join(", ")}, ...). Full list: pass an unknown prefix to see all.`,
+	);
 	lines.push("- Clark form `{namespace-uri}localName`");
+	lines.push("- `ooxml_namespace` with no args (or a `query` substring) to discover namespaces");
+	lines.push(
+		"- `ooxml_search` / `ooxml_section` for elements documented in spec prose but not in the schema graph",
+	);
 	lines.push("- a different profile (currently only `transitional` is populated)");
 	return lines.join("\n");
 }

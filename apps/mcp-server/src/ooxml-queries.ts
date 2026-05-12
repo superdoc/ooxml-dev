@@ -13,21 +13,62 @@ type Sql = any;
 
 /**
  * Common OOXML prefix -> namespace map for parsing user qnames like "w:tbl".
- * Documents may use other bindings; for those, callers can pass Clark form
- * `{namespace}localName` or just `localName` and accept the WML default.
+ *
+ * Prefixes here are the conventional bindings used in real .docx / .xlsx /
+ * .pptx packages and across the spec. A document may rebind any of these
+ * (the XML spec lets `xmlns:w="..."` point anywhere), so for non-standard
+ * bindings callers should pass Clark form `{namespace}localName` or just
+ * `localName` and accept the WML default.
+ *
+ * Note: the spec PDF and the shipped XSDs occasionally disagree about the
+ * canonical URI for a namespace. Where they differ we bind the prefix to
+ * the URI used by the XSD (which is what the schema graph keys on). The
+ * spec-prose URI is still reachable via `ooxml_search` / `ooxml_section`.
+ * Example: `ds:` (custom XML data storage). The XSD targets
+ * `.../officeDocument/2006/customXml`; ECMA-376 Part 1 §15.2.6 names
+ * `.../officeDocument/customXmlDataProps`. We bind `ds` to the XSD URI.
  */
 const COMMON_PREFIXES: Record<string, string> = {
+	// Core ML vocabularies
 	w: "http://schemas.openxmlformats.org/wordprocessingml/2006/main",
-	r: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
-	s: "http://schemas.openxmlformats.org/officeDocument/2006/sharedTypes",
-	m: "http://schemas.openxmlformats.org/officeDocument/2006/math",
+	x: "http://schemas.openxmlformats.org/spreadsheetml/2006/main",
+	p: "http://schemas.openxmlformats.org/presentationml/2006/main",
+
+	// DrawingML
 	a: "http://schemas.openxmlformats.org/drawingml/2006/main",
 	wp: "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
 	pic: "http://schemas.openxmlformats.org/drawingml/2006/picture",
 	c: "http://schemas.openxmlformats.org/drawingml/2006/chart",
 	dgm: "http://schemas.openxmlformats.org/drawingml/2006/diagram",
+	xdr: "http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing",
+
+	// Shared / officeDocument family
+	r: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+	s: "http://schemas.openxmlformats.org/officeDocument/2006/sharedTypes",
+	m: "http://schemas.openxmlformats.org/officeDocument/2006/math",
+	ds: "http://schemas.openxmlformats.org/officeDocument/2006/customXml",
+	vt: "http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes",
+
+	// Package / OPC core properties
+	cp: "http://schemas.openxmlformats.org/package/2006/metadata/core-properties",
+	dc: "http://purl.org/dc/elements/1.1/",
+	dcterms: "http://purl.org/dc/terms/",
+	dcmitype: "http://purl.org/dc/dcmitype/",
+
+	// Markup compatibility + Microsoft Word extensions
+	mc: "http://schemas.openxmlformats.org/markup-compatibility/2006",
+	w14: "http://schemas.microsoft.com/office/word/2010/wordml",
+	w15: "http://schemas.microsoft.com/office/word/2012/wordml",
+	w16: "http://schemas.microsoft.com/office/word/2018/wordml",
+
+	// VML (legacy)
+	v: "urn:schemas-microsoft-com:vml",
+	o: "urn:schemas-microsoft-com:office:office",
+
+	// W3C built-ins
 	xsd: "http://www.w3.org/2001/XMLSchema",
 	xs: "http://www.w3.org/2001/XMLSchema",
+	xsi: "http://www.w3.org/2001/XMLSchema-instance",
 	xml: "http://www.w3.org/XML/1998/namespace",
 };
 
@@ -42,8 +83,16 @@ export interface ParsedQName {
 export type QNameParseResult = { ok: true; qname: ParsedQName } | { ok: false; reason: string };
 
 /**
+ * Sorted, comma-separated list of known prefixes (for error messages and
+ * tool descriptions). Kept in sync with COMMON_PREFIXES via getter.
+ */
+export function knownPrefixes(): string[] {
+	return Object.keys(COMMON_PREFIXES).sort();
+}
+
+/**
  * Parse a user-supplied qname. Accepts:
- *   - `prefix:localName` for known OOXML prefixes (w, r, s, m, a, wp, pic, c, dgm, xsd, xml)
+ *   - `prefix:localName` for any prefix in COMMON_PREFIXES
  *   - `{namespace}localName` Clark form
  *   - bare `localName` (assumes WML main namespace)
  */
@@ -70,7 +119,7 @@ export function parseQName(raw: string): QNameParseResult {
 	if (!namespace) {
 		return {
 			ok: false,
-			reason: `unknown prefix '${prefix}'. Use a known prefix (w, r, s, m, a, wp, pic, c, dgm), or Clark form {namespace}localName.`,
+			reason: `unknown prefix '${prefix}'. Known prefixes: ${knownPrefixes().join(", ")}. Or pass Clark form {namespace}localName.`,
 		};
 	}
 	return { ok: true, qname: { namespace, localName, rawPrefix: prefix } };
@@ -612,4 +661,118 @@ export async function getNamespaceInfo(sql: Sql, uri: string): Promise<Namespace
 		for (const v of (r.vocabularies as string[]) ?? []) vocabSet.add(v);
 	}
 	return { uri, vocabularies: [...vocabSet].sort(), profiles };
+}
+
+/**
+ * List ingested namespaces, optionally filtered by a case-insensitive
+ * substring of the URI. Returns one entry per namespace with the same
+ * shape as `getNamespaceInfo` so callers can format the list uniformly.
+ *
+ * Only namespaces that actually contain symbols are returned: an empty
+ * row in `xsd_namespaces` (no profile membership) is treated as not
+ * present, which matches what an agent cares about.
+ */
+export async function listNamespaces(
+	sql: Sql,
+	opts: { query?: string } = {},
+): Promise<NamespaceInfo[]> {
+	const q = opts.query?.trim();
+	const rows = q
+		? await sql`
+			SELECT ns.uri, p.name AS profile_name, COUNT(*)::int AS symbol_count,
+			       array_agg(DISTINCT s.vocabulary_id) AS vocabularies
+			FROM xsd_namespaces ns
+			JOIN xsd_symbol_profiles sp ON sp.namespace_id = ns.id
+			JOIN xsd_profiles p ON p.id = sp.profile_id
+			JOIN xsd_symbols s ON s.id = sp.symbol_id
+			WHERE ns.uri ILIKE ${`%${q}%`}
+			GROUP BY ns.uri, p.name
+			ORDER BY ns.uri, p.name
+		`
+		: await sql`
+			SELECT ns.uri, p.name AS profile_name, COUNT(*)::int AS symbol_count,
+			       array_agg(DISTINCT s.vocabulary_id) AS vocabularies
+			FROM xsd_namespaces ns
+			JOIN xsd_symbol_profiles sp ON sp.namespace_id = ns.id
+			JOIN xsd_profiles p ON p.id = sp.profile_id
+			JOIN xsd_symbols s ON s.id = sp.symbol_id
+			GROUP BY ns.uri, p.name
+			ORDER BY ns.uri, p.name
+		`;
+
+	const byUri = new Map<string, NamespaceInfo>();
+	for (const r of rows) {
+		const uri = r.uri as string;
+		let info = byUri.get(uri);
+		if (!info) {
+			info = { uri, vocabularies: [], profiles: [] };
+			byUri.set(uri, info);
+		}
+		info.profiles.push({
+			name: r.profile_name as string,
+			symbolCount: r.symbol_count as number,
+		});
+		for (const v of (r.vocabularies as string[]) ?? []) {
+			if (!info.vocabularies.includes(v)) info.vocabularies.push(v);
+		}
+	}
+	for (const info of byUri.values()) info.vocabularies.sort();
+	return [...byUri.values()];
+}
+
+export interface LocalNameHit {
+	localName: string;
+	kind: string;
+	vocabularyId: string;
+	namespaceUri: string;
+}
+
+/**
+ * Find top-level symbols with this local name across all namespaces in a
+ * profile. Used to power "did you mean?" suggestions when an exact lookup
+ * misses: e.g. `t` exists as both `w:t` and `a:t`, and an agent asking for
+ * `t` deserves to see both.
+ *
+ * Returns at most 10 hits. Excludes local elements (parent_symbol_id IS
+ * NOT NULL) for the same reason `lookupSymbol` does: they have no global
+ * qname-addressable identity.
+ */
+export async function findLocalNameAcrossNamespaces(
+	sql: Sql,
+	localName: string,
+	profile: string,
+	opts: { kind?: string } = {},
+): Promise<LocalNameHit[]> {
+	const rows = opts.kind
+		? await sql`
+			SELECT DISTINCT s.local_name, s.kind, s.vocabulary_id, ns.uri AS namespace_uri
+			FROM xsd_symbols s
+			JOIN xsd_symbol_profiles sp ON sp.symbol_id = s.id
+			JOIN xsd_namespaces ns ON ns.id = sp.namespace_id
+			JOIN xsd_profiles p ON p.id = sp.profile_id
+			WHERE s.local_name = ${localName}
+			  AND s.kind = ${opts.kind}
+			  AND s.parent_symbol_id IS NULL
+			  AND p.name = ${profile}
+			ORDER BY s.vocabulary_id, s.kind
+			LIMIT 10
+		`
+		: await sql`
+			SELECT DISTINCT s.local_name, s.kind, s.vocabulary_id, ns.uri AS namespace_uri
+			FROM xsd_symbols s
+			JOIN xsd_symbol_profiles sp ON sp.symbol_id = s.id
+			JOIN xsd_namespaces ns ON ns.id = sp.namespace_id
+			JOIN xsd_profiles p ON p.id = sp.profile_id
+			WHERE s.local_name = ${localName}
+			  AND s.parent_symbol_id IS NULL
+			  AND p.name = ${profile}
+			ORDER BY s.vocabulary_id, s.kind
+			LIMIT 10
+		`;
+	return rows.map((r: Record<string, unknown>) => ({
+		localName: r.local_name as string,
+		kind: r.kind as string,
+		vocabularyId: r.vocabulary_id as string,
+		namespaceUri: r.namespace_uri as string,
+	}));
 }

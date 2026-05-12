@@ -8,15 +8,18 @@ import { afterAll, beforeAll, expect, test } from "bun:test";
 import { createDbClient, type DbClient } from "../../packages/shared/src/db/index.ts";
 import { ingestSchemaSet } from "../../scripts/ingest-xsd/ingest.ts";
 import {
+	findLocalNameAcrossNamespaces,
 	getAttributes,
 	getChildren,
 	getEnums,
 	getNamespaceInfo,
+	listNamespaces,
 	lookupElement,
 	lookupSymbolByTypeRef,
 	lookupType,
 	parseQName,
 } from "../../apps/mcp-server/src/ooxml-queries.ts";
+import { runOoxmlTool } from "../../apps/mcp-server/src/ooxml-tools.ts";
 
 const FIXTURES_DIR = join(import.meta.dir, "..", "ingest-xsd", "fixtures");
 import { getTestDatabaseUrl } from "../test-db.ts";
@@ -87,6 +90,50 @@ test("parseQName: prefixed, Clark, bare", () => {
 
 	const d = parseQName("zzz:something");
 	expect(d.ok).toBe(false);
+});
+
+test("parseQName: package-level and Microsoft extension prefixes resolve", () => {
+	// ds: the spec PDF (Part 1 §15.2.6) cites .../customXmlDataProps, but the
+	// shipped XSD targets .../customXml. We bind ds: to the XSD URI since
+	// that's what the schema graph keys on; the prose URI is reachable via
+	// ooxml_search / ooxml_section.
+	const ds = parseQName("ds:datastoreItem");
+	expect(ds.ok).toBe(true);
+	if (ds.ok) {
+		expect(ds.qname.namespace).toBe(
+			"http://schemas.openxmlformats.org/officeDocument/2006/customXml",
+		);
+		expect(ds.qname.localName).toBe("datastoreItem");
+	}
+
+	const cp = parseQName("cp:coreProperties");
+	expect(cp.ok).toBe(true);
+	if (cp.ok) {
+		expect(cp.qname.namespace).toBe(
+			"http://schemas.openxmlformats.org/package/2006/metadata/core-properties",
+		);
+	}
+
+	const w14 = parseQName("w14:checksum");
+	expect(w14.ok).toBe(true);
+	if (w14.ok) {
+		expect(w14.qname.namespace).toBe("http://schemas.microsoft.com/office/word/2010/wordml");
+	}
+
+	const dc = parseQName("dc:creator");
+	expect(dc.ok).toBe(true);
+	if (dc.ok) expect(dc.qname.namespace).toBe("http://purl.org/dc/elements/1.1/");
+});
+
+test("parseQName: unknown prefix error lists every known prefix", () => {
+	const r = parseQName("nope:thing");
+	expect(r.ok).toBe(false);
+	if (!r.ok) {
+		// Spot-check a few we just added; full list rendered by knownPrefixes().
+		expect(r.reason).toContain("ds");
+		expect(r.reason).toContain("w14");
+		expect(r.reason).toContain("Clark form");
+	}
 });
 
 test("lookupElement: top-level element with type_ref", async () => {
@@ -358,4 +405,111 @@ test("element-to-type chain: lookup w-style element, follow type_ref, fetch chil
 	expect(type?.localName).toBe("CT_Empty");
 	const children = await getChildren(db.sql, type!.id, "transitional");
 	expect(children).toHaveLength(0);
+});
+
+test("listNamespaces: no query returns every ingested namespace with profile/vocab info", async () => {
+	const all = await listNamespaces(db.sql);
+	const uris = all.map((n) => n.uri).sort();
+	expect(uris).toContain(WML_NS);
+	expect(uris).toContain(SHARED_NS);
+	const wml = all.find((n) => n.uri === WML_NS);
+	expect(wml?.vocabularies).toContain("wml-main");
+	expect(wml?.profiles.find((p) => p.name === "transitional")?.symbolCount).toBeGreaterThan(0);
+});
+
+test("listNamespaces: query is a case-insensitive substring of the URI", async () => {
+	const wml = await listNamespaces(db.sql, { query: "WORDPROCESSINGML" });
+	expect(wml.map((n) => n.uri)).toEqual([WML_NS]);
+
+	const shared = await listNamespaces(db.sql, { query: "sharedTypes" });
+	expect(shared.map((n) => n.uri)).toEqual([SHARED_NS]);
+
+	const none = await listNamespaces(db.sql, { query: "this-does-not-exist" });
+	expect(none).toHaveLength(0);
+});
+
+test("findLocalNameAcrossNamespaces: surfaces hits across vocabularies and kinds", async () => {
+	// `document` is a top-level element in WML. With no kind filter, the
+	// element should show up as a candidate.
+	const hits = await findLocalNameAcrossNamespaces(db.sql, "document", "transitional");
+	const elementHit = hits.find((h) => h.kind === "element");
+	expect(elementHit?.vocabularyId).toBe("wml-main");
+	expect(elementHit?.namespaceUri).toBe(WML_NS);
+
+	// Kind filter narrows the result set.
+	const typesOnly = await findLocalNameAcrossNamespaces(db.sql, "document", "transitional", {
+		kind: "simpleType",
+	});
+	expect(typesOnly).toHaveLength(0);
+});
+
+test("ooxml_namespace: no args lists ingested namespaces in a markdown table", async () => {
+	const out = await runOoxmlTool("ooxml_namespace", {}, db.sql);
+	expect(out).toContain("Ingested namespaces");
+	expect(out).toContain(WML_NS);
+	expect(out).toContain("wml-main");
+	expect(out).toContain("| uri |");
+});
+
+test("ooxml_namespace: query filters to substring matches", async () => {
+	const out = await runOoxmlTool("ooxml_namespace", { query: "sharedTypes" }, db.sql);
+	expect(out).toContain(`Namespaces matching 'sharedTypes'`);
+	expect(out).toContain(SHARED_NS);
+	// Other namespaces should be filtered out.
+	expect(out).not.toContain(WML_NS);
+});
+
+test("ooxml_namespace: exact URI returns full report", async () => {
+	const out = await runOoxmlTool("ooxml_namespace", { uri: WML_NS }, db.sql);
+	expect(out).toContain(`## Namespace ${WML_NS}`);
+	expect(out).toContain("wml-main");
+	expect(out).toContain("transitional:");
+});
+
+test("ooxml_namespace: exact URI miss falls back to last-segment substring search", async () => {
+	// The fallback uses the URI's last path segment, NOT the whole URI. The
+	// motivating case (.../customXmlDataProps vs .../customXml) is *not*
+	// expected to resolve through this fallback - that needs an alias table.
+	// What the fallback IS good for: variations on an ingested URI.
+	const ghostUri = `${WML_NS}/oops-not-real`;
+	const out = await runOoxmlTool("ooxml_namespace", { uri: ghostUri }, db.sql);
+	expect(out).toContain(`Namespace URI '${ghostUri}' not found exactly`);
+	// `oops-not-real` shouldn't match any ingested URI. Both the "no near
+	// match" line AND the alias-resolution disclaimer should appear, so the
+	// agent isn't left thinking the fallback can bridge spec/XSD URI drift.
+	expect(out).toContain("No near-matches");
+	expect(out).toContain("no alias resolution");
+});
+
+test("ooxml_namespace: exact URI miss with a near-segment match surfaces neighbors", async () => {
+	// Use a URI whose last segment IS an ingested namespace's last segment
+	// ('main' is common to WML / DML / SML once those are ingested). With
+	// only WML fixtures ingested, the last segment 'main' will match WML.
+	const ghostUri = "http://example.invalid/something/main";
+	const out = await runOoxmlTool("ooxml_namespace", { uri: ghostUri }, db.sql);
+	expect(out).toContain(`Namespace URI '${ghostUri}' not found exactly`);
+	expect(out).toContain("Showing substring matches for 'main'");
+	expect(out).toContain(WML_NS);
+	// And the disclaimer about missing alias resolution should still appear.
+	expect(out).toContain("No alias resolution");
+});
+
+test("ooxml_element: kind-filtered not-found suppresses did-you-mean when no elements match", async () => {
+	// CT_Para is a complexType, not a top-level element. ooxml_element scopes
+	// its did-you-mean query to `kind: "element"` so the complexType is
+	// intentionally NOT surfaced as a suggestion - it isn't a viable
+	// substitute for a missing element. The block stays hidden in that case.
+	const out = await runOoxmlTool("ooxml_element", { qname: "w:CT_Para" }, db.sql);
+	expect(out).toContain("Not found: element CT_Para");
+	expect(out).not.toContain("Other top-level symbols");
+});
+
+test("ooxml_type: not-found shows 'Other top-level symbols' when only an element exists", async () => {
+	// 'document' exists as an element in WML but not as a type. ooxml_type
+	// should miss and the did-you-mean (no kind filter) should surface the
+	// element under the renamed heading.
+	const out = await runOoxmlTool("ooxml_type", { qname: "w:document" }, db.sql);
+	expect(out).toContain("Not found: type document");
+	expect(out).toContain("Other top-level symbols named `document`");
+	expect(out).toContain("element `document` in wml-main");
 });
