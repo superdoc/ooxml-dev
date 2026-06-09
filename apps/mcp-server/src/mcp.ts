@@ -140,7 +140,7 @@ function handleInitialize(id: number | string | null): JsonRpcResponse {
 				version: "0.1.0",
 			},
 			instructions:
-				"OOXML (ECMA-376 / Office Open XML) reference server. Three tool families: (1) prose search over the spec PDFs (ooxml_search, ooxml_section, ooxml_parts); (2) deterministic schema lookup over the parsed XSDs (ooxml_element, ooxml_type, ooxml_children, ooxml_attributes, ooxml_enum, ooxml_namespace); (3) OPC package metadata curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x (ooxml_package_part). The three corpora can disagree about URIs for the same concept (custom XML data storage is the canonical example); each tool surface notes when it keys on the XSD URI vs the spec-prose URI.",
+				"OOXML (ECMA-376 / Office Open XML) reference server. Four tool families: (1) prose search over the spec PDFs (ooxml_search, ooxml_section, ooxml_parts); (2) deterministic schema lookup over the parsed XSDs (ooxml_element, ooxml_type, ooxml_children, ooxml_attributes, ooxml_enum, ooxml_namespace); (3) OPC package metadata curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x (ooxml_package_part); (4) preset shape geometry curated from Annex D presetShapeDefinitions.xml — adjust-guide names for every <a:prstGeom> shape (ooxml_preset_shape). The spec PDF search tools cannot answer questions about Annex D content; use ooxml_preset_shape for that. The three schema/prose/package corpora can disagree about URIs for the same concept (custom XML data storage is the canonical example); each tool surface notes when it keys on the XSD URI vs the spec-prose URI.",
 		},
 	};
 }

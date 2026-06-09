@@ -45,6 +45,15 @@
       "url": "https://ecma-international.org/wp-content/uploads/ECMA-376-4_5th_edition_december_2016.zip",
       "license_note": "Published by Ecma International. See the ECMA-376 publications page for the current download and licensing terms before redistribution.",
       "sha256": "bd25da1109f73762356596918bf5ff8b74a1331642dba5f1c1d1dfc6bed34ecd"
+    },
+    {
+      "name": "ecma-376-annex-d-dml-geometries",
+      "kind": "curated_static",
+      "edition": "5th",
+      "version": "2016-12",
+      "url": "https://ecma-international.org/publications-and-standards/standards/ecma-376/",
+      "license_note": "Derived from ECMA-376 Annex D electronic addenda (presetShapeDefinitions.xml). Adjust-guide names curated statically in preset-shape-geom.ts; full geometry formulas not included.",
+      "notes": "Annex D ships as a separate electronic addenda ZIP and is not indexed by the PDF ingestion pipeline. The ooxml_preset_shape tool serves adjust-value guide names (adj, adj1, adj2, hf, vf) from the curated static list. For full geometry path formulas, consult the addenda ZIP or reference implementations such as LibreOffice oox-drawingml-adj-names or ONLYOFFICE OOXMLShapes."
     }
   ]
 }

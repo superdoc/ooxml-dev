@@ -3,7 +3,8 @@
  *
  * Tools:
  *   ooxml_element, ooxml_type, ooxml_children,
- *   ooxml_attributes, ooxml_enum, ooxml_namespace.
+ *   ooxml_attributes, ooxml_enum, ooxml_namespace,
+ *   ooxml_package_part, ooxml_preset_shape.
  *
  * Default profile is `transitional`. Future profiles (e.g. word-compatible-docx)
  * will compose Transitional with Office extension schemas.
@@ -11,6 +12,7 @@
 
 import { neon } from "@neondatabase/serverless";
 import type { ToolDef } from "./mcp";
+import { listAdjustableShapes, lookupShapeGuides } from "./preset-shape-geom";
 import {
 	type AttrEntry,
 	type ChildEdge,
@@ -166,6 +168,26 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 			},
 		},
 	},
+	{
+		name: "ooxml_preset_shape",
+		description:
+			"Look up the adjust-value guide names for a DrawingML preset shape (`<a:prstGeom prst='...'>` attribute value). " +
+			"Returns the ordered `<a:gd>` names that must appear in the `<a:avLst>` when emitting adjust values, sourced from " +
+			"ECMA-376 Part 1 Annex D (`presetShapeDefinitions.xml`). The spec PDF search tools cannot answer this — the guide " +
+			"names live in a separate electronic addendum, not in the main spec text. " +
+			"Pass `shape` to look up a single shape (e.g. 'round2SameRect', 'upArrow', 'roundRect'). " +
+			"Omit `shape` to list every preset shape that takes adjust values.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				shape: {
+					type: "string",
+					description:
+						"Preset shape name — the @prst attribute value on <a:prstGeom>, e.g. 'round2SameRect', 'upArrow'. Omit to list all adjustable shapes.",
+				},
+			},
+		},
+	},
 ];
 
 export type OoxmlToolName =
@@ -175,7 +197,8 @@ export type OoxmlToolName =
 	| "ooxml_attributes"
 	| "ooxml_enum"
 	| "ooxml_namespace"
-	| "ooxml_package_part";
+	| "ooxml_package_part"
+	| "ooxml_preset_shape";
 
 const OOXML_TOOL_NAMES: ReadonlySet<string> = new Set(OOXML_TOOL_DEFS.map((t) => t.name));
 
@@ -421,6 +444,19 @@ export async function runOoxmlTool(
 				title: query ? `Package parts matching '${query}'` : "Curated OPC package parts",
 				query,
 			});
+		}
+
+		case "ooxml_preset_shape": {
+			const shape = typeof args.shape === "string" ? args.shape.trim() : "";
+			if (!shape) {
+				const shapes = listAdjustableShapes();
+				return formatPresetShapeList(shapes);
+			}
+			const guides = lookupShapeGuides(shape);
+			if (guides === null) {
+				return formatPresetShapeNoGuides(shape);
+			}
+			return formatPresetShapeReport(shape, guides);
 		}
 
 		default: {
@@ -817,5 +853,128 @@ function formatLocalElementReport(
 			lines.push(`- ${l.parentKind} \`${l.parentLocalName}\``);
 		}
 	}
+	return lines.join("\n");
+}
+
+// --- Preset shape geometry formatting -----------------------------------
+
+function formatPresetShapeReport(shape: string, guides: string[]): string {
+	const lines: string[] = [];
+	lines.push(`## Preset shape: ${shape}`);
+	lines.push("");
+	lines.push("**Source**: ECMA-376 Part 1 Annex D (`presetShapeDefinitions.xml`)");
+	lines.push("");
+	lines.push("**`<a:avLst>` guide names** (in order):");
+	lines.push("");
+	for (const g of guides) {
+		lines.push(`- \`${g}\``);
+	}
+	lines.push("");
+	lines.push(
+		"Emit these as `<a:gd name=\"...\">` children of `<a:avLst>` inside `<a:prstGeom>`. " +
+			"Default values and formula details are in Annex D (`presetShapeDefinitions.xml`); " +
+			"see also the ONLYOFFICE OOXMLShapes C++ implementations for annotated formulas: " +
+			"https://github.com/ONLYOFFICE/core/tree/master/MsBinaryFile/Common/Vml/PPTXShape/OOXMLShapes",
+	);
+	lines.push("");
+	lines.push("**Scale note**: most `adj*` values use a 0–100000 unit where 100000 represents");
+	lines.push(
+		"the full reference dimension (often `ss = min(w, h)`). Many shapes clamp internally",
+	);
+	lines.push("to 0–50000 via a `pin` formula. `hf`/`vf` guides use a different scale.");
+	lines.push("");
+	lines.push(
+		"**Spec ref**: ECMA-376 Part 1 §20.1.10.55 (`ST_ShapeType` enumeration), Annex D geometry",
+	);
+	return lines.join("\n");
+}
+
+function formatPresetShapeNoGuides(shape: string): string {
+	const lines: string[] = [];
+	lines.push(`## Preset shape: ${shape}`);
+	lines.push("");
+
+	// Distinguish known-no-guides from unknown shape name
+	const allShapeNames = new Set([
+		// A representative sample of shapes that take no guides (complete list
+		// would be every ST_ShapeType value not in the adjustable set).
+		"rect",
+		"ellipse",
+		"line",
+		"rtTriangle",
+		"diamond",
+		"parallelogram",
+		"trapezoid",
+		"pentagon",
+		"hexagon",
+		"heptagon",
+		"octagon",
+		"decagon",
+		"dodecagon",
+		"star4",
+		"star5",
+		"star6",
+		"star7",
+		"star8",
+		"star10",
+		"star12",
+		"star16",
+		"star24",
+		"star32",
+		"ribbon",
+		"ribbon2",
+		"ellipseRibbon",
+		"ellipseRibbon2",
+		"irregularSeal1",
+		"irregularSeal2",
+		"lightningBolt",
+		"heart",
+		"sun",
+		"moon",
+		"smileyFace",
+		"cloud",
+		"noSmoking",
+		"can",
+		"cube",
+		"bevel",
+		"donut",
+		"plus",
+	]);
+
+	lines.push(
+		`\`${shape}\` takes **no adjust values** — emit an empty \`<a:avLst/>\` inside \`<a:prstGeom prst="${shape}">\`.`,
+	);
+	lines.push("");
+	if (!allShapeNames.has(shape)) {
+		lines.push(
+			`_If you expected adjust values for this shape, double-check the spelling against §20.1.10.55 (\`ST_ShapeType\`). Unknown shape names are also reported here as "no guides"._`,
+		);
+		lines.push("");
+	}
+	lines.push("Call `ooxml_preset_shape` with no args to list every shape that has adjust guides.");
+	return lines.join("\n");
+}
+
+function formatPresetShapeList(shapes: string[]): string {
+	const lines: string[] = [];
+	lines.push("## Preset shapes with adjust guides");
+	lines.push("");
+	lines.push(
+		`${shapes.length} preset shapes declare at least one \`<a:gd>\` in their \`<a:avLst>\`. ` +
+			"Pass a `shape` name for the ordered guide names.",
+	);
+	lines.push("");
+	lines.push("| shape | guide count |");
+	lines.push("| --- | --- |");
+
+	for (const s of shapes) {
+		const count = lookupShapeGuides(s)?.length ?? 0;
+		lines.push(`| \`${s}\` | ${count} |`);
+	}
+	lines.push("");
+	lines.push(
+		"**Source**: ECMA-376 Part 1 Annex D (`presetShapeDefinitions.xml`). " +
+			"Shapes not listed here take no adjust values (empty `<a:avLst/>` is correct).",
+	);
 	return lines.join("\n");
 }
