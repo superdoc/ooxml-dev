@@ -43,11 +43,36 @@ bun run pdf:upload   1                            ./embedded/part1.json
 Useful when iterating on chunking or trying a different embedding provider
 without re-extracting.
 
+## Page numbers
+
+These PDFs carry two numbering systems, and mixing them up sends every search
+result to the wrong page:
+
+- **physical page** - the sheet index, what a viewer's `#page=N` addresses.
+- **printed page** - the number in the running header, which restarts at 1
+  after the roman-numeral front matter.
+
+`extract.py` extracts with `page_chunks=True`, so each line's physical page is
+known exactly rather than guessed from stray digits in the text. It measures the
+front-matter offset from the running headers and writes it to
+`metadata.json` as `pageOffset`.
+
+`spec_content.page_number` stores the **printed** page - the number a reader
+sees on the page and cites. `PdfViewer` adds the part's `pageOffset` back when
+building the `#page=` fragment.
+
+Every extraction run prints the `totalPages` / `pageOffset` pair for that part.
+When a PDF is replaced (a new edition, a re-paginated release), copy those two
+numbers into `PDF_CONFIG` in `apps/web/src/components/PdfViewer.tsx`.
+
+Section bodies keep inline `<!--page:N-->` markers so `chunk.ts` can attribute
+each chunk to the page it actually falls on rather than to its section's first
+page. The markers are stripped from stored content and embedding text.
+
 ## Files
 
 - `pipeline.ts` - orchestrator (extract -> chunk -> embed -> upload)
 - `extract.py` - PDF -> section-aware markdown via pymupdf4llm
-- `fix-page-numbers.py` - PDF prelude-aware page-number alignment
 - `chunk.ts` - markdown -> 6 KB chunks with section IDs
 - `embed.ts` - chunks -> chunks + 1024-dim embeddings
 - `upload.ts` - bulk insert into `spec_content`

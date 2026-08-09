@@ -1,71 +1,102 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// PDF URLs and page counts for each part
-const PDF_CONFIG: Record<number, { url: string; totalPages: number; name: string }> = {
+/**
+ * PDF URLs, sheet counts, and front-matter offsets for each part.
+ *
+ * `totalPages` is the number of sheets in the file - what `#page=` addresses.
+ * `pageOffset` is how many sheets precede printed page 1 (cover, contents,
+ * foreword). Both are measured from the published PDFs; `extract.py` prints
+ * the pair for a part at the end of every extraction run.
+ *
+ * Search results carry the *printed* page (`spec_content.page_number`), so
+ * navigating to one means adding `pageOffset` back.
+ */
+const PDF_CONFIG: Record<
+	number,
+	{ url: string; totalPages: number; pageOffset: number; name: string }
+> = {
 	1: {
 		url: "https://cdn.ooxml.dev/ecma-376/part1.pdf",
-		totalPages: 5560,
+		totalPages: 5026,
+		pageOffset: 10,
 		name: "Fundamentals",
 	},
 	2: {
 		url: "https://cdn.ooxml.dev/ecma-376/part2.pdf",
-		totalPages: 129,
+		totalPages: 137,
+		pageOffset: 8,
 		name: "OPC",
 	},
 	3: {
 		url: "https://cdn.ooxml.dev/ecma-376/part3.pdf",
-		totalPages: 65,
+		totalPages: 44,
+		pageOffset: 6,
 		name: "Compatibility",
 	},
 	4: {
 		url: "https://cdn.ooxml.dev/ecma-376/part4.pdf",
-		totalPages: 4031,
+		totalPages: 1548,
+		pageOffset: 14,
 		name: "Transitional",
 	},
 };
 
 interface PdfViewerProps {
 	partNumber: number;
-	pageNumber: number;
-	onPageChange?: (page: number) => void;
+	/** Printed page from the spec, as stored in `spec_content.page_number`. Null opens the cover. */
+	pageNumber: number | null;
+	/** Fires with the printed page now shown, or null while inside the front matter. */
+	onPageChange?: (printedPage: number | null) => void;
 }
 
 export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerProps) {
 	const config = PDF_CONFIG[partNumber] || PDF_CONFIG[1];
-	const [currentPage, setCurrentPage] = useState(pageNumber);
+
+	// State is the physical sheet - that is what `#page=` and the scrubber address.
+	const toSheet = useCallback(
+		(printed: number | null) =>
+			printed === null ? 1 : Math.max(1, Math.min(printed + config.pageOffset, config.totalPages)),
+		[config.pageOffset, config.totalPages],
+	);
+	const toPrinted = useCallback(
+		(sheet: number) => (sheet > config.pageOffset ? sheet - config.pageOffset : null),
+		[config.pageOffset],
+	);
+
+	const [currentSheet, setCurrentSheet] = useState(() => toSheet(pageNumber));
 	const [isDragging, setIsDragging] = useState(false);
 	const progressRef = useRef<HTMLDivElement>(null);
 
 	// Sync with prop changes
 	useEffect(() => {
-		setCurrentPage(pageNumber);
-	}, [pageNumber]);
+		setCurrentSheet(toSheet(pageNumber));
+	}, [pageNumber, toSheet]);
 
-	const updatePage = useCallback(
-		(newPage: number) => {
-			const clamped = Math.max(1, Math.min(newPage, config.totalPages));
-			setCurrentPage(clamped);
-			onPageChange?.(clamped);
+	const updateSheet = useCallback(
+		(newSheet: number) => {
+			const clamped = Math.max(1, Math.min(newSheet, config.totalPages));
+			setCurrentSheet(clamped);
+			onPageChange?.(toPrinted(clamped));
 		},
-		[config.totalPages, onPageChange],
+		[config.totalPages, onPageChange, toPrinted],
 	);
 
-	const handlePrev = () => updatePage(currentPage - 1);
-	const handleNext = () => updatePage(currentPage + 1);
+	const handlePrev = () => updateSheet(currentSheet - 1);
+	const handleNext = () => updateSheet(currentSheet + 1);
 
 	// Progress bar interaction
-	const getPageFromPosition = useCallback(
+	const getSheetFromPosition = useCallback(
 		(clientX: number) => {
-			if (!progressRef.current) return currentPage;
+			if (!progressRef.current) return currentSheet;
 			const rect = progressRef.current.getBoundingClientRect();
 			const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
 			return Math.max(1, Math.round(ratio * config.totalPages));
 		},
-		[config.totalPages, currentPage],
+		[config.totalPages, currentSheet],
 	);
 
 	const handleProgressClick = (e: React.MouseEvent) => {
-		updatePage(getPageFromPosition(e.clientX));
+		updateSheet(getSheetFromPosition(e.clientX));
 	};
 
 	const handleDragStart = (e: React.MouseEvent) => {
@@ -77,7 +108,7 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 		if (!isDragging) return;
 
 		const handleMove = (e: MouseEvent) => {
-			updatePage(getPageFromPosition(e.clientX));
+			updateSheet(getSheetFromPosition(e.clientX));
 		};
 
 		const handleUp = () => {
@@ -91,35 +122,37 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 			document.removeEventListener("mousemove", handleMove);
 			document.removeEventListener("mouseup", handleUp);
 		};
-	}, [isDragging, getPageFromPosition, updatePage]);
+	}, [isDragging, getSheetFromPosition, updateSheet]);
 
 	// Keyboard navigation
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			if (e.key === "ArrowLeft") {
 				e.preventDefault();
-				setCurrentPage((p) => {
-					const newPage = Math.max(1, p - 1);
-					onPageChange?.(newPage);
-					return newPage;
+				setCurrentSheet((p) => {
+					const newSheet = Math.max(1, p - 1);
+					onPageChange?.(toPrinted(newSheet));
+					return newSheet;
 				});
 			}
 			if (e.key === "ArrowRight") {
 				e.preventDefault();
-				setCurrentPage((p) => {
-					const newPage = Math.min(config.totalPages, p + 1);
-					onPageChange?.(newPage);
-					return newPage;
+				setCurrentSheet((p) => {
+					const newSheet = Math.min(config.totalPages, p + 1);
+					onPageChange?.(toPrinted(newSheet));
+					return newSheet;
 				});
 			}
 		};
 
 		document.addEventListener("keydown", handleKeyDown);
 		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, [config.totalPages, onPageChange]);
+	}, [config.totalPages, onPageChange, toPrinted]);
 
-	const progressPercent = (currentPage / config.totalPages) * 100;
-	const pdfUrl = `${config.url}#page=${currentPage}&toolbar=0&navpanes=0`;
+	const progressPercent = (currentSheet / config.totalPages) * 100;
+	const printedPage = toPrinted(currentSheet);
+	const printedTotal = config.totalPages - config.pageOffset;
+	const pdfUrl = `${config.url}#page=${currentSheet}&toolbar=0&navpanes=0`;
 
 	return (
 		<div className="flex h-full flex-col bg-[var(--color-bg-secondary)]">
@@ -139,7 +172,7 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 							<button
 								type="button"
 								onClick={handlePrev}
-								disabled={currentPage <= 1}
+								disabled={currentSheet <= 1}
 								className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] transition hover:bg-[var(--color-border)] hover:text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
 								aria-label="Previous page"
 							>
@@ -148,7 +181,7 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 							<button
 								type="button"
 								onClick={handleNext}
-								disabled={currentPage >= config.totalPages}
+								disabled={currentSheet >= config.totalPages}
 								className="flex h-8 w-8 items-center justify-center rounded-lg bg-[var(--color-bg-tertiary)] text-[var(--color-text-secondary)] transition hover:bg-[var(--color-border)] hover:text-[var(--color-text-primary)] disabled:opacity-40 disabled:cursor-not-allowed"
 								aria-label="Next page"
 							>
@@ -156,8 +189,16 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 							</button>
 						</div>
 						<div className="flex items-baseline gap-1 text-sm">
-							<span className="font-semibold text-[var(--color-text-primary)]">{currentPage}</span>
-							<span className="text-[var(--color-text-muted)]">of {config.totalPages}</span>
+							{printedPage === null ? (
+								<span className="text-[var(--color-text-muted)]">Front matter</span>
+							) : (
+								<>
+									<span className="font-semibold text-[var(--color-text-primary)]">
+										{printedPage}
+									</span>
+									<span className="text-[var(--color-text-muted)]">of {printedTotal}</span>
+								</>
+							)}
 						</div>
 					</div>
 				</div>
@@ -186,7 +227,11 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 					key={pdfUrl}
 					src={pdfUrl}
 					className="h-full w-full border-0"
-					title={`ECMA-376 Part ${partNumber} - Page ${currentPage}`}
+					title={
+						printedPage === null
+							? `ECMA-376 Part ${partNumber} - front matter`
+							: `ECMA-376 Part ${partNumber} - page ${printedPage}`
+					}
 				/>
 			</div>
 		</div>

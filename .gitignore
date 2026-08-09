@@ -12,3 +12,6 @@ PLAN.md
 
 # XSD/spec artifacts: pulled by scripts/fetch-xsd.ts; never committed.
 data/xsd-cache/
+# Python bytecode
+__pycache__/
+*.pyc

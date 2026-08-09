@@ -201,10 +201,9 @@ export function SpecExplorer() {
 		return () => document.removeEventListener("keydown", handleKeyDown);
 	}, [results]);
 
-	// Handle page change from PDF viewer
-	const handlePageChange = useCallback((page: number) => {
+	// Handle page change from PDF viewer (printed spec page, null in front matter)
+	const handlePageChange = useCallback((_printedPage: number | null) => {
 		// Could sync page changes back to state if needed
-		console.log("Page changed to:", page);
 	}, []);
 
 	return (
@@ -309,7 +308,7 @@ export function SpecExplorer() {
 				<div className="overflow-hidden">
 					<PdfViewer
 						partNumber={selectedResult?.partNumber ?? 1}
-						pageNumber={selectedResult?.pageNumber ?? 1}
+						pageNumber={selectedResult?.pageNumber ?? null}
 						onPageChange={handlePageChange}
 					/>
 				</div>
