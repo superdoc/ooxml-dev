@@ -217,7 +217,7 @@ HEADING_PATTERNS = [
 TITLE_STARTS_WITH_WORD_RE = re.compile(r"^[A-Za-z0-9(]")
 
 ANNEX_PATTERN = re.compile(
-    r"^(?:#+\s*)?\*{0,2}(Annex\s+[A-Z])\*{0,2}\s*\*{0,2}(?:\(([^)]+)\))?\*{0,2}\s*(.*)$",
+    r"^(?:#+\s*)?\*{0,2}\s*Annex\s+([A-Z])\b[.\s]*(.*?)\*{0,2}$",
     re.IGNORECASE,
 )
 
@@ -244,12 +244,16 @@ def match_heading(stripped: str) -> tuple[str, str] | None:
     if stripped.startswith("|"):
         return None
 
+    # A heading carries markdown emphasis. Annex pages repeat a bare "Annex A"
+    # as their running header, which is not a heading.
+    has_heading_markup = stripped.startswith("#") or stripped.startswith("**")
+
     annex = ANNEX_PATTERN.match(stripped)
-    if annex and stripped.lstrip("#* ").lower().startswith("annex"):
-        title = (annex.group(3) or annex.group(2) or "").strip()
-        if looks_like_toc(title, stripped):
+    if annex and has_heading_markup:
+        title = annex.group(2).strip().strip("*").strip()
+        if not title or looks_like_toc(title, stripped):
             return None
-        return annex.group(1), title
+        return f"Annex {annex.group(1).upper()}", title
 
     for pattern in HEADING_PATTERNS:
         match = pattern.match(stripped)
