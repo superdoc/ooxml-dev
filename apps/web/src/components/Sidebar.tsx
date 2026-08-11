@@ -161,10 +161,10 @@ function SidebarLink({
 				to={to}
 				onClick={onClick}
 				className={clsx(
-					"block rounded px-3 py-1.5 text-sm transition",
+					"block rounded border-l-2 px-3 py-1.5 text-sm transition",
 					active
-						? "bg-[var(--color-accent)]/10 font-medium text-[var(--color-accent)]"
-						: "text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text-primary)]",
+						? "rounded-l-none border-[var(--color-accent)] bg-[var(--color-accent)]/10 font-medium text-[var(--color-accent)]"
+						: "border-transparent text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-tertiary)] hover:text-[var(--color-text-primary)]",
 				)}
 			>
 				{isNew ? (

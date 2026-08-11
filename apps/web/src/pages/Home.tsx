@@ -23,7 +23,7 @@ export function Home() {
 				<div className="flex justify-center gap-4 mb-6">
 					<Link
 						to="/docs/"
-						className="rounded-lg bg-[var(--color-accent)] px-5 py-2.5 font-medium text-white transition hover:bg-[var(--color-accent-hover)] sm:px-6 sm:py-3"
+						className="rounded-lg bg-[var(--color-accent)] px-5 py-2.5 font-medium text-white shadow-[0_4px_14px_var(--color-accent-glow)] transition hover:bg-[var(--color-accent-hover)] hover:shadow-[0_6px_20px_var(--color-accent-glow)] sm:px-6 sm:py-3"
 					>
 						Browse Reference
 					</Link>
