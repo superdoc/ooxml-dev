@@ -87,12 +87,17 @@ if (process.env.OOXML_NO_BROWSER === "1") {
 	Bun.spawn(["open", authorizationUrl.toString()], { stdout: "ignore", stderr: "ignore" });
 }
 
+let callbackTimeout: ReturnType<typeof setTimeout> | undefined;
 const callbackResult = await Promise.race([
 	callback,
-	new Promise<{ error: Error }>((resolve) =>
-		setTimeout(() => resolve({ error: new Error("Clerk authorization timed out") }), 300_000),
-	),
+	new Promise<{ error: Error }>((resolve) => {
+		callbackTimeout = setTimeout(
+			() => resolve({ error: new Error("Clerk authorization timed out") }),
+			300_000,
+		);
+	}),
 ]);
+if (callbackTimeout) clearTimeout(callbackTimeout);
 await new Promise((resolve) => setTimeout(resolve, 100));
 server.stop(true);
 
