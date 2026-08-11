@@ -13,7 +13,7 @@ ooxml.dev is an interactive OOXML reference and MCP server for developers buildi
 
 ## What it does not own
 
-- SuperDoc features, support promises, or editor behavior.
+- Implementing or supporting a document editor.
 - General DOCX editing, conversion, or end-user workflows.
 - Behavior claims that are not supported by a source or a verified example.
 
