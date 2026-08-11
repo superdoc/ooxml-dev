@@ -1,4 +1,5 @@
 {
 	"apps/mcp-server": "1.3.0",
-	"apps/web": "1.3.0"
+	"apps/web": "1.3.0",
+	"packages/shared": "1.3.0"
 }

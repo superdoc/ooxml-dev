@@ -9,6 +9,8 @@ on:
 permissions:
   contents: write
   pull-requests: write
+  # release-please labels its release PRs through the issues API
+  issues: write
 
 jobs:
   release-please:

@@ -10,6 +10,18 @@
 			"release-type": "node",
 			"component": "web",
 			"include-component-in-tag": true
+		},
+		"packages/shared": {
+			"release-type": "node",
+			"component": "shared",
+			"include-component-in-tag": true
 		}
-	}
+	},
+	"plugins": [
+		{
+			"type": "linked-versions",
+			"groupName": "mcp-server",
+			"components": ["mcp", "shared"]
+		}
+	]
 }
