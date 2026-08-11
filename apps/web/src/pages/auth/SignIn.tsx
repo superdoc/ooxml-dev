@@ -161,7 +161,7 @@ export function SignIn() {
 		<AuthPage title="Sign in | ooxml.dev">
 			<AuthCard
 				title="Connect to ooxml.dev"
-				subtitle="Sign in to finish connecting your CLI or MCP client."
+				subtitle="Sign in to finish connecting your MCP client."
 				footer={
 					<>
 						New here?{" "}

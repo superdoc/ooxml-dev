@@ -60,16 +60,9 @@ Three tool families share one server:
 - **Schema lookup** (over the parsed XSDs): `ooxml_element`, `ooxml_type`, `ooxml_children`, `ooxml_attributes`, `ooxml_enum`, `ooxml_namespace`
 - **Package metadata** (curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x): `ooxml_package_part`
 
-### Authenticated CLI beta
+### Authentication
 
-The beta CLI signs in with Clerk and connects to the authenticated `/mcp-v2` endpoint. From a checkout:
-
-```bash
-bun run ooxml login
-bun run ooxml call ooxml_element '{"qname":"w:p"}'
-```
-
-Run `bun run ooxml help` for the complete command list. The existing `/mcp` endpoint remains public during the beta.
+`/mcp` uses OAuth 2.1. Compatible MCP clients register automatically, open the ooxml.dev sign-in and consent pages, and receive a token limited to this MCP server. Clerk handles user identity; the MCP server handles dynamic client registration, PKCE, tokens, refresh, and revocation.
 
 ## Development
 

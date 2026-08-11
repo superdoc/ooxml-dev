@@ -1,7 +1,7 @@
 name = "ooxml-mcp"
 main = "src/index.ts"
 compatibility_date = "2026-01-28"
-compatibility_flags = ["nodejs_compat"]
+compatibility_flags = ["nodejs_compat", "global_fetch_strictly_public"]
 
 # Custom domain. Wrangler claims api.ooxml.dev for this worker on deploy and
 # manages the DNS record on Cloudflare's side; we don't add it manually.
@@ -9,16 +9,16 @@ routes = [
 	{ pattern = "api.ooxml.dev", custom_domain = true }
 ]
 
+[[kv_namespaces]]
+binding = "OAUTH_KV"
+id = "ba18d2194ddf4ebf8a057f96cf24e6aa"
+
 # Secrets (set via wrangler secret):
 # wrangler secret put DATABASE_URL
 # wrangler secret put VOYAGE_API_KEY
+# wrangler secret put CLERK_PUBLISHABLE_KEY
 # wrangler secret put CLERK_SECRET_KEY
 
 [observability]
 enabled = true
 head_sampling_rate = 1
-
-[vars]
-CLERK_OAUTH_CLIENT_ID = "WmmdN4WJ1XeXoLMn"
-CLERK_OAUTH_ISSUER = "https://clerk.ooxml.dev"
-MCP_V2_RESOURCE_URL = "https://api.ooxml.dev/mcp-v2"

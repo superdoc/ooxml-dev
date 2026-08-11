@@ -25,6 +25,23 @@ describe("safeRequestedRedirect", () => {
 		expect(safeRequestedRedirect(CLERK_FRONTEND_API, requested, APP_ORIGIN)).toBe(requested);
 	});
 
+	test("allows MCP authorization to continue after Clerk sign-in", () => {
+		const requested =
+			"https://api.ooxml.dev/authorize?client_id=test&redirect_uri=http%3A%2F%2F127.0.0.1%2Fcallback";
+
+		expect(safeRequestedRedirect(CLERK_FRONTEND_API, requested, APP_ORIGIN)).toBe(requested);
+	});
+
+	test("rejects other API paths as auth redirects", () => {
+		expect(
+			safeRequestedRedirect(
+				CLERK_FRONTEND_API,
+				"https://api.ooxml.dev/search",
+				APP_ORIGIN,
+			),
+		).toBe("/");
+	});
+
 	test("rejects unrelated external redirects", () => {
 		expect(
 			safeRequestedRedirect(

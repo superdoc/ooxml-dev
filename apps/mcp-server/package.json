@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@clerk/backend": "^3.16.3",
+    "@cloudflare/workers-oauth-provider": "^0.10.3",
     "@modelcontextprotocol/server": "2.0.0",
     "@neondatabase/serverless": "^1.0.2",
     "@ooxml-dev/shared": "workspace:*",

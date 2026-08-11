@@ -10,6 +10,11 @@ interface FinalizeNavigationParams {
 type UrlDecorator = (url: string) => string;
 
 const keepUrl = (url: string) => url;
+const MCP_AUTHORIZATION_ORIGIN = "https://api.ooxml.dev";
+
+function isMcpAuthorizationRedirect(destination: URL): boolean {
+	return destination.origin === MCP_AUTHORIZATION_ORIGIN && destination.pathname === "/authorize";
+}
 
 export function safeRequestedRedirect(
 	frontendApi: string,
@@ -25,11 +30,12 @@ export function safeRequestedRedirect(
 		).origin;
 		const accountsOrigin = new URL(buildAccountsBaseUrl(frontendApi)).origin;
 
-		// OAuth can return through Clerk's API or Account Portal. Reject every other external URL.
+		// Clerk owns sign-in, while the API owns MCP authorization and consent.
 		if (
 			destination.origin !== currentOrigin &&
 			destination.origin !== clerkOrigin &&
-			destination.origin !== accountsOrigin
+			destination.origin !== accountsOrigin &&
+			!isMcpAuthorizationRedirect(destination)
 		) {
 			return "/";
 		}
