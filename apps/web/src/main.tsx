@@ -17,6 +17,28 @@ const router = createBrowserRouter([
 			{ path: "/mcp", element: <Mcp /> },
 			{ path: "/spec", element: <SpecExplorer /> },
 			{
+				lazy: async () => {
+					const { AuthProvider } = await import("./pages/auth/AuthProvider");
+					return { Component: AuthProvider };
+				},
+				children: [
+					{
+						path: "/sign-in/*",
+						lazy: async () => {
+							const { SignIn } = await import("./pages/auth/SignIn");
+							return { Component: SignIn };
+						},
+					},
+					{
+						path: "/sign-up/*",
+						lazy: async () => {
+							const { SignUp } = await import("./pages/auth/SignUp");
+							return { Component: SignUp };
+						},
+					},
+				],
+			},
+			{
 				path: "/docs",
 				element: <DocsLayout />,
 				children: [

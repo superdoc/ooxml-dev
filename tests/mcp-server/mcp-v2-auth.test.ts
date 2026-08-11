@@ -220,6 +220,7 @@ test("Clerk Backend API expirations are accepted in seconds or milliseconds", as
 	expect(secondsAuth.expiresAt).toBe(seconds);
 	expect(millisecondsAuth.expiresAt).toBe(seconds);
 });
+
 test("protected resource metadata points MCP clients to Clerk", async () => {
 	const response = protectedResourceMetadataResponse(new Request(METADATA_URL), {
 		resourceUrl: RESOURCE_URL,

@@ -95,9 +95,11 @@ Database setup, ingest pipelines, and tests live at the repo root — see the to
 
 ## Authenticated MCP v2 beta
 
-`/mcp-v2` is a protected beta route using MCP `2026-07-28` and Clerk. It stays separate from the public `/mcp` route while the auth flow is proven with real users.
+`/mcp-v2` is a Clerk-protected beta route that uses MCP `2026-07-28`. It stays separate from the public `/mcp` route while we test the auth flow with real users.
 
-It exposes the 10 public OOXML tools plus `ooxml_whoami`. Successful tool calls write the Clerk user ID, client ID, tool name, surface, and time to `mcp_usage_events` and Cloudflare logs. Tokens and tool arguments are not recorded.
+Clerk does not provide dynamic client registration. Clients that require it stay on the public `/mcp` route; the beta CLI uses the pre-registered `OOXML CLI` client.
+
+It exposes the 10 public OOXML tools plus `ooxml_whoami`. Successful tool calls write the Clerk user ID, client ID, tool name, surface, and timestamp to `mcp_usage_events` and Cloudflare logs. Tokens and tool arguments are never recorded.
 
 ```bash
 bun test tests/mcp-server/mcp-v2-auth.test.ts
@@ -106,9 +108,9 @@ bun run ooxml tools
 bun run ooxml call ooxml_element '{"qname":"w:p"}'
 ```
 
-The CLI opens Clerk in the browser, uses Authorization Code with S256 PKCE, and receives the access token on a fixed loopback callback. It saves tokens in a mode-`0600` file under the operating system's user config directory and refreshes them when Clerk returns a refresh token. Tokens are never printed.
+The CLI opens Clerk in the browser and uses Authorization Code with S256 PKCE. It receives the access token through a fixed loopback callback, then saves the token in a mode-`0600` file under the operating system's user config directory. It refreshes the token when Clerk returns a refresh token and never prints tokens.
 
-The OAuth discovery path is `/.well-known/oauth-protected-resource/mcp-v2`. The public Clerk client currently allows only `http://127.0.0.1:45879/callback`, so port `45879` must be available during login.
+The OAuth discovery path is `/.well-known/oauth-protected-resource/mcp-v2`. The public Clerk client allows only `http://127.0.0.1:45879/callback`, so port `45879` must be available during CLI login.
 
 To see identified users, load `DATABASE_URL` and `CLERK_SECRET_KEY` from the root `.env` and run:
 
@@ -116,4 +118,4 @@ To see identified users, load `DATABASE_URL` and `CLERK_SECRET_KEY` from the roo
 bun run mcp:v2:users
 ```
 
-Clerk currently accepts the RFC 8707 `resource` parameter but does not include it as an access-token `aud` claim. Until Clerk supports resource audiences, the server compensates by accepting tokens only from the dedicated `OOXML CLI` client ID and mapping that client to `/mcp-v2`. Do not reuse this OAuth client for another resource.
+Clerk accepts the RFC 8707 `resource` parameter but does not include it as an access-token `aud` claim. Until Clerk supports resource audiences, the server accepts tokens only from the dedicated `OOXML CLI` client and maps that client to `/mcp-v2`. Do not reuse this OAuth client for another resource.

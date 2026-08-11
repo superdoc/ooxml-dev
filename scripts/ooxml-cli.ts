@@ -4,10 +4,10 @@ import { chmod, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promi
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { MCP_V2_PROTOCOL_VERSION } from "../apps/mcp-server/src/mcp-v2";
+import { oauthSuccessPage } from "./oauth-callback-page";
 
-const CLIENT_ID = process.env.CLERK_OAUTH_CLIENT_ID ?? "ywoNOfxsoQ8Dw1FW";
-const AUTHORIZATION_SERVER =
-	process.env.CLERK_OAUTH_ISSUER ?? "https://glad-beetle-33.clerk.accounts.dev";
+const CLIENT_ID = process.env.CLERK_OAUTH_CLIENT_ID ?? "WmmdN4WJ1XeXoLMn";
+const AUTHORIZATION_SERVER = process.env.CLERK_OAUTH_ISSUER ?? "https://clerk.ooxml.dev";
 const MCP_URL = process.env.OOXML_MCP_URL ?? "https://api.ooxml.dev/mcp-v2";
 const CALLBACK_URL = "http://127.0.0.1:45879/callback";
 
@@ -152,8 +152,8 @@ async function login(): Promise<StoredTokens> {
 				const code = url.searchParams.get("code");
 				if (!code) return new Response("Invalid OAuth callback.", { status: 400 });
 				completeCallback({ code });
-				return new Response("OOXML CLI is connected. You can close this tab.", {
-					headers: { "Content-Type": "text/plain; charset=utf-8" },
+				return new Response(oauthSuccessPage(), {
+					headers: { "Content-Type": "text/html; charset=utf-8" },
 				});
 			},
 		});

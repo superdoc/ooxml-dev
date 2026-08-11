@@ -62,7 +62,7 @@ Three tool families share one server:
 
 ### Authenticated CLI beta
 
-The beta CLI uses Clerk login and the latest `/mcp-v2` route. From a checkout:
+The beta CLI signs in with Clerk and connects to the authenticated `/mcp-v2` endpoint. From a checkout:
 
 ```bash
 bun run ooxml login
@@ -77,7 +77,11 @@ Run `bun run ooxml help` for the complete command list. The existing `/mcp` endp
 bun install    # Install dependencies
 bun dev        # Dev server at http://localhost:5173
 bun run build  # Production build
+bun run build:prod  # Build with the ignored .env.prod file
 ```
+
+`build:prod` requires a live Clerk publishable key. This prevents production deploys from using the
+auth fallback or a test Clerk instance.
 
 ## Contributing
 

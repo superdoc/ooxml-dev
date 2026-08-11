@@ -14,6 +14,10 @@ import { getAllPaths, getSeoMeta } from "../src/data/seo";
 
 const DIST = resolve(import.meta.dir, "../dist");
 const SITE_URL = "https://ooxml.dev";
+const AUTH_PAGES = [
+	{ path: "/sign-in", title: "Sign in | ooxml.dev" },
+	{ path: "/sign-up", title: "Create an account | ooxml.dev" },
+];
 
 // Read the built index.html as template
 const template = readFileSync(resolve(DIST, "index.html"), "utf-8");
@@ -324,6 +328,16 @@ function render404Page(): string {
 	return html;
 }
 
+function renderAuthPage(title: string): string {
+	let html = template;
+	html = html.replace(/<title>[^<]*<\/title>/, `<title>${escapeHtml(title)}</title>`);
+	html = html.replace(
+		"</head>",
+		'    <meta name="robots" content="noindex, nofollow" data-auth-page/>\n  </head>',
+	);
+	return html;
+}
+
 // --- Main ---
 
 const paths = getAllPaths();
@@ -338,6 +352,14 @@ for (const path of paths) {
 	writeFileSync(filePath, html);
 	count++;
 	console.log(`  ✓ ${path}`);
+}
+
+// Auth routes need real output files for direct Clerk redirects, but stay out of the sitemap.
+for (const authPage of AUTH_PAGES) {
+	const filePath = resolve(DIST, `${authPage.path.slice(1)}/index.html`);
+	mkdirSync(dirname(filePath), { recursive: true });
+	writeFileSync(filePath, renderAuthPage(authPage.title));
+	console.log(`  ✓ ${authPage.path}`);
 }
 
 // Generate 404 page (Cloudflare Pages serves this with 404 status)
@@ -420,4 +442,6 @@ const llmsFullTxt = generateLlmsFullTxt();
 writeFileSync(resolve(DIST, "llms-full.txt"), llmsFullTxt);
 console.log(`  ✓ /llms-full.txt`);
 
-console.log(`\nPre-rendered ${count} pages + 404 + sitemap + llms-full.txt.`);
+console.log(
+	`\nPre-rendered ${count} pages + ${AUTH_PAGES.length} auth routes + 404 + sitemap + llms-full.txt.`,
+);
