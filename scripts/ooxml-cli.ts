@@ -57,7 +57,7 @@ export async function runCli(args = process.argv.slice(2)): Promise<void> {
 			const result = await withAccessToken((token) => mcpRequest(token, "tools/list", {}));
 			const tools = result.tools as Array<{ name?: string; description?: string }> | undefined;
 			if (!tools) throw new Error("MCP tools/list returned no tools");
-			for (const tool of tools) console.log(`${tool.name}\t${tool.description ?? ""}`);
+			console.log(tools.map((tool) => tool.name).join("\n"));
 			return;
 		}
 		case "call": {
