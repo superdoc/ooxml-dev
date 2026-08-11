@@ -12,3 +12,7 @@ PLAN.md
 
 # XSD/spec artifacts: pulled by scripts/fetch-xsd.ts; never committed.
 data/xsd-cache/
+
+# Python bytecode from scripts/ingest-pdf
+__pycache__/
+*.pyc

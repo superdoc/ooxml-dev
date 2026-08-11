@@ -16,20 +16,14 @@ import json
 import re
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from section_headings import match_section_heading  # noqa: E402
+
 
 def parse_sections_for_pages(md_text: str, start_page: int = 1) -> dict[str, int]:
     """Parse section IDs and their page numbers from markdown."""
     section_pages = {}
-
-    # Bold section header patterns
-    patterns = [
-        # Part 1 style: **12.3.2** **Title**
-        r'^\*\*(\d+(?:\.\d+)*)\*\*\s*\*\*([^*]+)\*\*$',
-        # Part 2/3/4 style: # **12.3.2. Title** or # **12. Title**
-        r'^#+\s*\*\*(\d+(?:\.\d+)*)\.?\s+([^*]+)\*\*$',
-        # Annex
-        r'^\*\*(Annex\s+[A-Z])\*\*\s*(?:\*\*)?(?:\(([^)]+)\))?(?:\*\*)?\s*(.*)$',
-    ]
 
     toc_pattern = r'^\d+(?:\.\d+)*\s+.+\.{2,}\s*\d+$'
     arabic_page_pattern = r'^(\d+)$'
@@ -57,13 +51,11 @@ def parse_sections_for_pages(md_text: str, start_page: int = 1) -> dict[str, int
             continue
 
         # Check for section headers
-        for pattern in patterns:
-            match = re.match(pattern, stripped, re.IGNORECASE)
-            if match:
-                section_id = match.group(1)
-                # +1 to match TOC page numbers
-                section_pages[section_id] = current_page + 1
-                break
+        match = match_section_heading(stripped)
+        if match:
+            section_id, _title = match
+            # +1 to match TOC page numbers
+            section_pages[section_id] = current_page + 1
 
     return section_pages
 

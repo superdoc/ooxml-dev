@@ -19,6 +19,14 @@ import re
 import os
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from section_headings import (  # noqa: E402
+    is_title_continuation,
+    match_section_heading,
+    needs_title_continuation,
+)
+
 
 def extract_pdf(pdf_path: str, output_dir: str, page_range: tuple[int, int] | None = None):
     """Extract PDF to markdown using pymupdf4llm."""
@@ -110,15 +118,6 @@ def parse_sections(md_text: str, start_page: int) -> list[dict]:
     """Parse section structure from markdown text."""
     sections = []
 
-    # Section patterns for ECMA-376
-    # Only match BOLD section headers (actual sections, not TOC entries)
-    patterns = [
-        # Main section with bold: **12.3.2** **Title**
-        r'^\*\*(\d+(?:\.\d+)*)\*\*\s*\*\*([^*]+)\*\*$',
-        # Annex with bold: **Annex A** **(normative)** or **Annex A (informative)**
-        r'^\*\*(Annex\s+[A-Z])\*\*\s*(?:\*\*)?(?:\(([^)]+)\))?(?:\*\*)?\s*(.*)$',
-    ]
-
     # TOC pattern to skip (has page number at end: "17.3.2 Title ... 264")
     toc_pattern = r'^\d+(?:\.\d+)*\s+.+\.{2,}\s*\d+$'
 
@@ -132,6 +131,7 @@ def parse_sections(md_text: str, start_page: int) -> list[dict]:
     current_section = None
     current_content = []
     current_page = start_page
+    awaiting_title = False
 
     for line in lines:
         stripped = line.strip()
@@ -152,13 +152,17 @@ def parse_sections(md_text: str, start_page: int) -> list[dict]:
         if re.match(toc_pattern, stripped):
             continue
 
-        # Check for section headers (bold only - actual sections)
-        section_match = None
-        for pattern in patterns:
-            match = re.match(pattern, stripped, re.IGNORECASE)
-            if match:
-                section_match = match
-                break
+        # Check for section headers (heading-marked or bold - actual sections)
+        section_match = match_section_heading(stripped)
+
+        # An annex name can land on the line right after its number/qualifier
+        if section_match is None and awaiting_title and stripped:
+            awaiting_title = False
+            continuation = is_title_continuation(stripped)
+            if continuation:
+                current_section["title"] = f"{current_section['title']} {continuation}".strip()
+                current_content.append(line)
+                continue
 
         if section_match:
             # Save previous section
@@ -167,10 +171,7 @@ def parse_sections(md_text: str, start_page: int) -> list[dict]:
                 current_section["pageEnd"] = current_page + 1  # +1 to match TOC
                 sections.append(current_section)
 
-            # Start new section
-            groups = section_match.groups()
-            section_id = groups[0]
-            title = groups[1] if len(groups) > 1 else ""
+            section_id, title = section_match
 
             # Calculate depth
             if section_id.startswith("Annex"):
@@ -191,6 +192,7 @@ def parse_sections(md_text: str, start_page: int) -> list[dict]:
                 "parentId": parent_id,
             }
             current_content = [line]
+            awaiting_title = needs_title_continuation(section_id, current_section["title"])
         elif current_section:
             current_content.append(line)
 
