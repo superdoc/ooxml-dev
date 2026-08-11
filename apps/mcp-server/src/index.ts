@@ -11,15 +11,14 @@
 
 import { createDb } from "./db";
 import { embedQuery } from "./embeddings";
-import { handleMcpRequest, TOOLS } from "./mcp";
+import { ALL_TOOL_DEFS, executeMcpTool, handleMcpRequest } from "./mcp";
 import {
 	createClerkOAuthTokenVerifier,
-	createConsoleUsageRecorder,
+	createDatabaseUsageRecorder,
 	createMcpV2Handler,
 	protectedResourceMetadataResponse,
 	protectedResourceMetadataUrl,
 } from "./mcp-v2";
-import { OOXML_TOOL_DEFS } from "./ooxml-tools";
 
 export interface Env {
 	DATABASE_URL: string;
@@ -126,8 +125,9 @@ export default {
 					expectedClientId: env.CLERK_OAUTH_CLIENT_ID,
 					expectedResourceUrl: env.MCP_V2_RESOURCE_URL,
 				}),
-				usageRecorder: createConsoleUsageRecorder(),
+				usageRecorder: createDatabaseUsageRecorder(env.DATABASE_URL),
 				resourceMetadataUrl,
+				toolExecutor: (name, args) => executeMcpTool(name, args, env),
 			});
 			return addCorsHeaders(await handler(request), corsHeaders);
 		}
@@ -230,7 +230,7 @@ function handleMcpInfo(): Response {
 			name: "ooxml",
 			version: "0.1.0",
 			description: "OOXML (ECMA-376) reference server: prose search + schema lookup",
-			tools: [...TOOLS, ...OOXML_TOOL_DEFS],
+			tools: ALL_TOOL_DEFS,
 		}),
 		{
 			headers: { "Content-Type": "application/json" },

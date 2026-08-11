@@ -1,4 +1,5 @@
 import { createClerkClient } from "@clerk/backend";
+import { isClerkAPIResponseError } from "@clerk/backend/errors";
 import {
 	createMcpHandler,
 	getOAuthProtectedResourceMetadataUrl,
@@ -8,14 +9,16 @@ import {
 	type OAuthTokenVerifier,
 	requireBearerAuth,
 } from "@modelcontextprotocol/server";
+import { neon } from "@neondatabase/serverless";
 import { z } from "zod";
+import { ALL_TOOL_DEFS, type ToolDef } from "./mcp";
 
 export const MCP_V2_PROTOCOL_VERSION = "2026-07-28";
 export const MCP_V2_TOOL_NAME = "ooxml_whoami";
 
 export interface UsageEvent {
 	userId: string;
-	tool: typeof MCP_V2_TOOL_NAME;
+	tool: string;
 	surface: "mcp-v2";
 	client: string;
 	occurredAt: string;
@@ -36,6 +39,7 @@ interface McpV2Options {
 	verifier: OAuthTokenVerifier;
 	usageRecorder: UsageRecorder;
 	resourceMetadataUrl: string;
+	toolExecutor: (name: string, args: Record<string, unknown>) => Promise<string>;
 	now?: () => Date;
 }
 
@@ -79,7 +83,10 @@ export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OA
 					!expiresAt ||
 					verified.clientId !== options.expectedClientId
 				) {
-					throw new Error("Clerk OAuth token is expired, revoked, or issued to another client");
+					throw new OAuthError(
+						OAuthErrorCode.InvalidToken,
+						"The Clerk OAuth token is expired, revoked, or issued to another client",
+					);
 				}
 
 				return {
@@ -90,7 +97,14 @@ export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OA
 					resource: new URL(options.expectedResourceUrl),
 					extra: { userId: verified.subject },
 				};
-			} catch {
+			} catch (error) {
+				if (error instanceof OAuthError) throw error;
+				if (!isClerkAPIResponseError(error) || error.status >= 500) {
+					throw new OAuthError(
+						OAuthErrorCode.ServerError,
+						"Clerk token verification is temporarily unavailable",
+					);
+				}
 				throw new OAuthError(
 					OAuthErrorCode.InvalidToken,
 					"The Clerk OAuth token is invalid or expired",
@@ -171,6 +185,51 @@ export function createConsoleUsageRecorder(): UsageRecorder {
 	};
 }
 
+export function createDatabaseUsageRecorder(connectionString: string): UsageRecorder {
+	const sql = neon(connectionString);
+	return {
+		async record(event) {
+			await sql`
+				INSERT INTO mcp_usage_events
+					(clerk_user_id, oauth_client_id, tool_name, surface, occurred_at)
+				VALUES
+					(${event.userId}, ${event.client}, ${event.tool}, ${event.surface}, ${event.occurredAt})
+			`;
+			console.info("mcp usage", event);
+		},
+	};
+}
+
+type ToolProperty = {
+	type: "string" | "number";
+	description?: string;
+};
+
+function inputSchemaFor(tool: ToolDef): z.ZodObject<Record<string, z.ZodType>> {
+	const required = new Set(tool.inputSchema.required ?? []);
+	const shape: Record<string, z.ZodType> = {};
+
+	for (const [name, rawProperty] of Object.entries(tool.inputSchema.properties)) {
+		const property = rawProperty as ToolProperty;
+		let schema: z.ZodType = property.type === "number" ? z.number() : z.string();
+		if (property.description) schema = schema.describe(property.description);
+		shape[name] = required.has(name) ? schema : schema.optional();
+	}
+
+	return z.object(shape);
+}
+
+function authenticatedIdentity(context: {
+	http?: { authInfo?: { clientId: string; extra?: Record<string, unknown> } };
+}): { userId: string; clientId: string } {
+	const authInfo = context.http?.authInfo;
+	const userId = authInfo?.extra?.userId;
+	if (!authInfo || typeof userId !== "string") {
+		throw new Error("Authenticated Clerk user ID is missing from the MCP request context");
+	}
+	return { userId, clientId: authInfo.clientId };
+}
+
 /**
  * This route is intentionally separate from /mcp until the authenticated v2
  * path has been exercised with a real Clerk-issued token.
@@ -179,6 +238,7 @@ export function createMcpV2Handler(options: McpV2Options): (request: Request) =>
 	const now = options.now ?? (() => new Date());
 	const authGate = requireBearerAuth({
 		verifier: options.verifier,
+		requiredScopes: ["profile"],
 		resourceMetadataUrl: options.resourceMetadataUrl,
 	});
 	const handler = createMcpHandler(
@@ -192,25 +252,43 @@ export function createMcpV2Handler(options: McpV2Options): (request: Request) =>
 					inputSchema: z.object({}),
 				},
 				async (_args, context) => {
-					const authInfo = context.http?.authInfo;
-					const userId = authInfo?.extra?.userId;
-					if (!authInfo || typeof userId !== "string") {
-						throw new Error("Authenticated Clerk user ID is missing from the MCP request context");
-					}
+					const identity = authenticatedIdentity(context);
 
 					await options.usageRecorder.record({
-						userId,
+						userId: identity.userId,
 						tool: MCP_V2_TOOL_NAME,
 						surface: "mcp-v2",
-						client: authInfo.clientId,
+						client: identity.clientId,
 						occurredAt: now().toISOString(),
 					});
 
 					return {
-						content: [{ type: "text", text: `Authenticated as ${userId}` }],
+						content: [{ type: "text", text: `Authenticated as ${identity.userId}` }],
 					};
 				},
 			);
+
+			for (const tool of ALL_TOOL_DEFS) {
+				server.registerTool(
+					tool.name,
+					{
+						description: tool.description,
+						inputSchema: inputSchemaFor(tool),
+					},
+					async (args, context) => {
+						const identity = authenticatedIdentity(context);
+						const text = await options.toolExecutor(tool.name, args);
+						await options.usageRecorder.record({
+							userId: identity.userId,
+							tool: tool.name,
+							surface: "mcp-v2",
+							client: identity.clientId,
+							occurredAt: now().toISOString(),
+						});
+						return { content: [{ type: "text", text }] };
+					},
+				);
+			}
 
 			return server;
 		},

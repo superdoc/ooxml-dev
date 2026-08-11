@@ -43,6 +43,22 @@ CREATE INDEX idx_content_part ON spec_content(part_number);
 CREATE INDEX idx_content_section ON spec_content(section_id);
 CREATE INDEX idx_content_source ON spec_content(source_id);
 
+-- Authenticated MCP usage is kept separate from spec content because it is
+-- operational product data. Clerk remains the source of truth for identity.
+CREATE TABLE mcp_usage_events (
+  id BIGSERIAL PRIMARY KEY,
+  clerk_user_id TEXT NOT NULL,
+  oauth_client_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  surface TEXT NOT NULL,
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_mcp_usage_events_user_time
+  ON mcp_usage_events(clerk_user_id, occurred_at DESC);
+CREATE INDEX idx_mcp_usage_events_time
+  ON mcp_usage_events(occurred_at DESC);
+
 -- ----------------------------------------------------------------------------
 -- XSD schema graph
 --

@@ -16,7 +16,13 @@ const METADATA_URL = "https://api.ooxml.dev/.well-known/oauth-protected-resource
 const AUTHORIZATION_SERVER = "https://clerk.example";
 
 function oauthVerifier(
-	overrides: Partial<{ clientId: string; expired: boolean; expiration: number }> = {},
+	overrides: Partial<{
+		clientId: string;
+		expired: boolean;
+		expiration: number;
+		revoked: boolean;
+		scopes: string[];
+	}> = {},
 ) {
 	return createClerkOAuthTokenVerifier({
 		secretKey: "unused-in-test",
@@ -27,22 +33,26 @@ function oauthVerifier(
 				return {
 					clientId: overrides.clientId ?? CLIENT_ID,
 					subject: USER_ID,
-					scopes: ["profile"],
-					revoked: false,
+					scopes: overrides.scopes ?? ["profile"],
+					revoked: overrides.revoked ?? false,
 					expired: overrides.expired ?? false,
-				expiration: overrides.expiration ?? Date.now() + 300_000,
+					expiration: overrides.expiration ?? Date.now() + 300_000,
 				};
 			},
 		},
 	});
 }
 
-function toolCall(token?: string): Request {
+function toolCall(
+	token?: string,
+	name = MCP_V2_TOOL_NAME,
+	args: Record<string, unknown> = {},
+): Request {
 	const headers = new Headers({
 		"Content-Type": "application/json",
 		"MCP-Protocol-Version": MCP_V2_PROTOCOL_VERSION,
 		"Mcp-Method": "tools/call",
-		"Mcp-Name": MCP_V2_TOOL_NAME,
+		"Mcp-Name": name,
 	});
 	if (token) headers.set("Authorization", `Bearer ${token}`);
 
@@ -54,8 +64,8 @@ function toolCall(token?: string): Request {
 			id: 1,
 			method: "tools/call",
 			params: {
-				name: MCP_V2_TOOL_NAME,
-				arguments: {},
+				name,
+				arguments: args,
 				_meta: {
 					"io.modelcontextprotocol/protocolVersion": MCP_V2_PROTOCOL_VERSION,
 					"io.modelcontextprotocol/clientInfo": {
@@ -77,6 +87,7 @@ test("a verified Clerk OAuth identity reaches MCP 2026-07-28 and the usage recor
 		verifier: oauthVerifier(),
 		usageRecorder: { record: (event) => events.push(event) },
 		resourceMetadataUrl: METADATA_URL,
+		toolExecutor: async () => "unused",
 		now: () => new Date("2026-08-11T12:00:00.000Z"),
 	});
 
@@ -104,6 +115,7 @@ test("a missing token returns a discoverable OAuth challenge", async () => {
 		verifier: oauthVerifier(),
 		usageRecorder: { record: () => {} },
 		resourceMetadataUrl: METADATA_URL,
+		toolExecutor: async () => "unused",
 	});
 
 	const response = await handler(toolCall());
@@ -120,12 +132,82 @@ test("an OAuth token issued to another client is rejected", async () => {
 		verifier: oauthVerifier({ clientId: "another_client" }),
 		usageRecorder: { record: (event) => events.push(event) },
 		resourceMetadataUrl: METADATA_URL,
+		toolExecutor: async () => "unused",
 	});
 
 	const response = await handler(toolCall("oat_wrong_client"));
 
 	expect(response.status).toBe(401);
 	expect(events).toEqual([]);
+});
+
+test("an authenticated user can call a real OOXML tool and records identified usage", async () => {
+	const events: UsageEvent[] = [];
+	const calls: Array<{ name: string; args: Record<string, unknown> }> = [];
+	const handler = createMcpV2Handler({
+		verifier: oauthVerifier(),
+		usageRecorder: { record: (event) => events.push(event) },
+		resourceMetadataUrl: METADATA_URL,
+		toolExecutor: async (name, args) => {
+			calls.push({ name, args });
+			return "Element w:p";
+		},
+		now: () => new Date("2026-08-11T12:30:00.000Z"),
+	});
+
+	const response = await handler(toolCall("oat_test", "ooxml_element", { qname: "w:p" }));
+	const body = (await response.json()) as {
+		result?: { content?: Array<{ text?: string }> };
+	};
+
+	expect(response.status).toBe(200);
+	expect(body.result?.content?.[0]?.text).toBe("Element w:p");
+	expect(calls).toEqual([{ name: "ooxml_element", args: { qname: "w:p" } }]);
+	expect(events).toEqual([
+		{
+			userId: USER_ID,
+			tool: "ooxml_element",
+			surface: "mcp-v2",
+			client: CLIENT_ID,
+			occurredAt: "2026-08-11T12:30:00.000Z",
+		},
+	]);
+});
+
+test("a token without the profile scope is rejected", async () => {
+	const handler = createMcpV2Handler({
+		verifier: oauthVerifier({ scopes: [] }),
+		usageRecorder: { record: () => {} },
+		resourceMetadataUrl: METADATA_URL,
+		toolExecutor: async () => "unused",
+	});
+
+	const response = await handler(toolCall("oat_without_scope"));
+	expect(response.status).toBe(403);
+});
+
+test("a Clerk verification outage returns a server error instead of rejecting the login", async () => {
+	const verifier = createClerkOAuthTokenVerifier({
+		secretKey: "unused-in-test",
+		expectedClientId: CLIENT_ID,
+		expectedResourceUrl: RESOURCE_URL,
+		accessTokenClient: {
+			async verify() {
+				throw new Error("Clerk unavailable");
+			},
+		},
+	});
+	const handler = createMcpV2Handler({
+		verifier,
+		usageRecorder: { record: () => {} },
+		resourceMetadataUrl: METADATA_URL,
+		toolExecutor: async () => "unused",
+	});
+
+	const response = await handler(toolCall("oat_during_outage"));
+	const body = (await response.json()) as { error?: string };
+	expect(response.status).toBe(500);
+	expect(body.error).toBe("server_error");
 });
 
 test("Clerk Backend API expirations are accepted in seconds or milliseconds", async () => {
