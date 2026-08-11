@@ -90,9 +90,10 @@ if (process.env.OOXML_NO_BROWSER === "1") {
 const callbackResult = await Promise.race([
 	callback,
 	new Promise<{ error: Error }>((resolve) =>
-		setTimeout(() => resolve({ error: new Error("Clerk authorization timed out") }), 120_000),
+		setTimeout(() => resolve({ error: new Error("Clerk authorization timed out") }), 300_000),
 	),
 ]);
+await new Promise((resolve) => setTimeout(resolve, 100));
 server.stop(true);
 
 if ("error" in callbackResult) throw callbackResult.error;
@@ -116,6 +117,10 @@ const tokenBody = (await tokenResponse.json()) as {
 };
 if (!tokenResponse.ok || !tokenBody.access_token) {
 	throw new Error(tokenBody.error_description ?? tokenBody.error ?? "Clerk token exchange failed");
+}
+
+if (process.env.OOXML_DEBUG_OAUTH === "1") {
+	console.log(JSON.stringify(safeTokenDetails(tokenBody.access_token)));
 }
 
 const mcpResponse = await fetch(MCP_URL, {
@@ -148,12 +153,32 @@ const mcpResponse = await fetch(MCP_URL, {
 
 const mcpBody = (await mcpResponse.json()) as {
 	result?: { content?: Array<{ text?: string }>; resultType?: string };
-	error?: { message?: string };
+	error?: string | { message?: string };
+	error_description?: string;
 };
-if (!mcpResponse.ok) throw new Error(mcpBody.error?.message ?? "Authenticated MCP call failed");
+if (!mcpResponse.ok) {
+	const rpcMessage = typeof mcpBody.error === "object" ? mcpBody.error.message : mcpBody.error;
+	throw new Error(
+		mcpBody.error_description ??
+			rpcMessage ??
+			`Authenticated MCP call failed: HTTP ${mcpResponse.status}`,
+	);
+}
 
 console.log(mcpBody.result?.content?.[0]?.text ?? "Authenticated MCP call completed.");
 
 function base64Url(bytes: Uint8Array): string {
 	return Buffer.from(bytes).toString("base64url");
+}
+
+function safeTokenDetails(token: string): { format: "opaque" | "jwt"; audience?: unknown } {
+	const payload = token.split(".")[1];
+	if (!payload) return { format: "opaque" };
+
+	try {
+		const claims = JSON.parse(Buffer.from(payload, "base64url").toString()) as { aud?: unknown };
+		return { format: "jwt", audience: claims.aud };
+	} catch {
+		return { format: "jwt" };
+	}
 }

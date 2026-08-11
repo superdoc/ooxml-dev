@@ -35,11 +35,6 @@ function oauthVerifier(overrides: Partial<{ clientId: string; expired: boolean }
 	});
 }
 
-function accessToken(audience = RESOURCE_URL): string {
-	const encoded = Buffer.from(JSON.stringify({ aud: audience })).toString("base64url");
-	return `header.${encoded}.signature`;
-}
-
 function toolCall(token?: string): Request {
 	const headers = new Headers({
 		"Content-Type": "application/json",
@@ -83,7 +78,7 @@ test("a verified Clerk OAuth identity reaches MCP 2026-07-28 and the usage recor
 		now: () => new Date("2026-08-11T12:00:00.000Z"),
 	});
 
-	const response = await handler(toolCall(accessToken()));
+	const response = await handler(toolCall("oat_test"));
 	const body = (await response.json()) as {
 		result?: { resultType?: string; content?: Array<{ text?: string }> };
 	};
@@ -125,24 +120,11 @@ test("an OAuth token issued to another client is rejected", async () => {
 		resourceMetadataUrl: METADATA_URL,
 	});
 
-	const response = await handler(toolCall(accessToken()));
+	const response = await handler(toolCall("oat_wrong_client"));
 
 	expect(response.status).toBe(401);
 	expect(events).toEqual([]);
 });
-
-test("an OAuth token issued for another resource is rejected", async () => {
-	const handler = createMcpV2Handler({
-		verifier: oauthVerifier(),
-		usageRecorder: { record: () => {} },
-		resourceMetadataUrl: METADATA_URL,
-	});
-
-	const response = await handler(toolCall(accessToken("https://other.example/mcp")));
-
-	expect(response.status).toBe(401);
-});
-
 test("protected resource metadata points MCP clients to Clerk", async () => {
 	const response = protectedResourceMetadataResponse(new Request(METADATA_URL), {
 		resourceUrl: RESOURCE_URL,

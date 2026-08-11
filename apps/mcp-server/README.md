@@ -107,3 +107,5 @@ bun run mcp:v2:login
 `mcp:v2:login` opens Clerk in the browser, uses Authorization Code with PKCE, receives the access token on a fixed loopback callback, and calls the deployed MCP tool. Tokens are held only in memory and are never printed.
 
 The OAuth discovery path is `/.well-known/oauth-protected-resource/mcp-v2`. The public Clerk client currently allows only `http://127.0.0.1:45879/callback`; keeping one fixed callback makes this first CLI proof easy to verify before designing the distributable CLI.
+
+Clerk currently accepts the RFC 8707 `resource` parameter but does not include it as an access-token `aud` claim. Until Clerk supports resource audiences, the server compensates by accepting tokens only from the dedicated `OOXML CLI` client ID and mapping that client to `/mcp-v2`. Do not reuse this OAuth client for another resource.

@@ -53,9 +53,11 @@ interface ClerkOAuthAccessTokenClient {
 }
 
 /**
- * Clerk OAuth access tokens are opaque, so verification happens through the
- * Backend API. The MCP handler only receives the verified identity; the token
- * itself is never recorded.
+ * Clerk currently ignores RFC 8707 `resource` when issuing OAuth tokens, so
+ * it does not emit an `aud` claim the resource server can validate. This MVP
+ * binds one dedicated Clerk client ID to one configured MCP resource instead.
+ * Do not reuse that OAuth client for another resource. The token is verified
+ * by Clerk and is never recorded.
  */
 
 export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OAuthTokenVerifier {
@@ -74,12 +76,9 @@ export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OA
 					verified.revoked ||
 					verified.expired ||
 					!verified.expiration ||
-					verified.clientId !== options.expectedClientId ||
-					!hasJwtAudience(token, options.expectedResourceUrl)
+					verified.clientId !== options.expectedClientId
 				) {
-					throw new Error(
-						"Clerk OAuth token is expired, revoked, or issued to another client or resource",
-					);
+					throw new Error("Clerk OAuth token is expired, revoked, or issued to another client");
 				}
 
 				return {
@@ -98,22 +97,6 @@ export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OA
 			}
 		},
 	};
-}
-
-function hasJwtAudience(token: string, expectedResourceUrl: string): boolean {
-	const payloadPart = token.split(".")[1];
-	if (!payloadPart) return false;
-
-	try {
-		const normalized = payloadPart.replace(/-/g, "+").replace(/_/g, "/");
-		const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-		const payload = JSON.parse(atob(padded)) as { aud?: string | string[] };
-		return Array.isArray(payload.aud)
-			? payload.aud.includes(expectedResourceUrl)
-			: payload.aud === expectedResourceUrl;
-	} catch {
-		return false;
-	}
 }
 
 export function protectedResourceMetadataUrl(resourceUrl: string): string {
