@@ -60,13 +60,21 @@ Three tool families share one server:
 - **Schema lookup** (over the parsed XSDs): `ooxml_element`, `ooxml_type`, `ooxml_children`, `ooxml_attributes`, `ooxml_enum`, `ooxml_namespace`
 - **Package metadata** (curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x): `ooxml_package_part`
 
+### Authentication
+
+`/mcp` uses OAuth 2.1. Compatible MCP clients register automatically, open the ooxml.dev sign-in and consent pages, and receive a token limited to this MCP server. Clerk handles user identity; the MCP server handles dynamic client registration, PKCE, tokens, refresh, and revocation.
+
 ## Development
 
 ```bash
 bun install    # Install dependencies
 bun dev        # Dev server at http://localhost:5173
 bun run build  # Production build
+bun run build:prod  # Build with the ignored .env.prod file
 ```
+
+`build:prod` requires a live Clerk publishable key. This prevents production deploys from using the
+auth fallback or a test Clerk instance.
 
 ## Contributing
 

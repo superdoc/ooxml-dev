@@ -3,7 +3,8 @@ dist/
 .DS_Store
 dev/
 .wrangler/
-.env
+.env*
+!.env.example
 .mcp.json
 .vscode/
 

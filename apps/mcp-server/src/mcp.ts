@@ -100,6 +100,17 @@ export const TOOLS: ToolDef[] = [
 	},
 ];
 
+export const ALL_TOOL_DEFS: ToolDef[] = [...TOOLS, ...OOXML_TOOL_DEFS];
+
+const ALL_TOOL_NAMES: ReadonlySet<string> = new Set(ALL_TOOL_DEFS.map((tool) => tool.name));
+
+export function isMcpTool(name: string): boolean {
+	return ALL_TOOL_NAMES.has(name);
+}
+
+export class McpToolInputError extends Error {}
+export class McpToolNotFoundError extends Error {}
+
 // JSON-RPC error codes
 const PARSE_ERROR = -32700;
 const INVALID_REQUEST = -32600;
@@ -149,8 +160,47 @@ function handleToolsList(id: number | string | null): JsonRpcResponse {
 	return {
 		jsonrpc: "2.0",
 		id,
-		result: { tools: [...TOOLS, ...OOXML_TOOL_DEFS] },
+		result: { tools: ALL_TOOL_DEFS },
 	};
+}
+
+export async function executeMcpTool(
+	name: string,
+	args: Record<string, unknown>,
+	env: Env,
+): Promise<string> {
+	if (isOoxmlTool(name)) return callOoxmlTool(name, args, env);
+
+	switch (name) {
+		case "ooxml_search": {
+			const query = args.query as string;
+			const part = args.part as number | undefined;
+			const limit = Math.min((args.limit as number) || 5, 20);
+			if (!query) throw new McpToolInputError("Missing required parameter: query");
+
+			const db = createDb(env.DATABASE_URL);
+			const embedding = await embedQuery(query, env.VOYAGE_API_KEY);
+			return formatSearchResults(query, await db.search(embedding, { limit, partNumber: part }));
+		}
+
+		case "ooxml_section": {
+			const sectionId = args.section_id as string;
+			const part = args.part as number | undefined;
+			if (!sectionId) throw new McpToolInputError("Missing required parameter: section_id");
+
+			const db = createDb(env.DATABASE_URL);
+			return formatSectionResults(sectionId, await db.getBySection(sectionId, part));
+		}
+
+		case "ooxml_parts": {
+			const part = args.part as number | undefined;
+			const db = createDb(env.DATABASE_URL);
+			return formatPartsList(await db.listSections(part), part);
+		}
+
+		default:
+			throw new McpToolNotFoundError(`Unknown tool: ${name}`);
+	}
 }
 
 async function handleToolsCall(
@@ -171,86 +221,19 @@ async function handleToolsCall(
 	}
 
 	try {
-		let resultText: string;
-
-		// Structural OOXML tools share the dispatch with the existing semantic
-		// tools below.
-		if (isOoxmlTool(name)) {
-			resultText = await callOoxmlTool(name, args ?? {}, env);
-			return {
-				jsonrpc: "2.0",
-				id,
-				result: { content: [{ type: "text", text: resultText }] },
-			};
-		}
-
-		switch (name) {
-			case "ooxml_search": {
-				const query = args?.query as string;
-				const part = args?.part as number | undefined;
-				const limit = Math.min((args?.limit as number) || 5, 20);
-
-				if (!query) {
-					return {
-						jsonrpc: "2.0",
-						id,
-						error: { code: INVALID_PARAMS, message: "Missing required parameter: query" },
-					};
-				}
-
-				const db = createDb(env.DATABASE_URL);
-				const embedding = await embedQuery(query, env.VOYAGE_API_KEY);
-				const results = await db.search(embedding, { limit, partNumber: part });
-
-				resultText = formatSearchResults(query, results);
-				break;
-			}
-
-			case "ooxml_section": {
-				const sectionId = args?.section_id as string;
-				const part = args?.part as number | undefined;
-
-				if (!sectionId) {
-					return {
-						jsonrpc: "2.0",
-						id,
-						error: { code: INVALID_PARAMS, message: "Missing required parameter: section_id" },
-					};
-				}
-
-				const db = createDb(env.DATABASE_URL);
-				const results = await db.getBySection(sectionId, part);
-
-				resultText = formatSectionResults(sectionId, results);
-				break;
-			}
-
-			case "ooxml_parts": {
-				const part = args?.part as number | undefined;
-
-				const db = createDb(env.DATABASE_URL);
-				const sections = await db.listSections(part);
-
-				resultText = formatPartsList(sections, part);
-				break;
-			}
-
-			default:
-				return {
-					jsonrpc: "2.0",
-					id,
-					error: { code: METHOD_NOT_FOUND, message: `Unknown tool: ${name}` },
-				};
-		}
-
+		const resultText = await executeMcpTool(name, args ?? {}, env);
 		return {
 			jsonrpc: "2.0",
 			id,
-			result: {
-				content: [{ type: "text", text: resultText }],
-			},
+			result: { content: [{ type: "text", text: resultText }] },
 		};
 	} catch (error) {
+		if (error instanceof McpToolInputError) {
+			return { jsonrpc: "2.0", id, error: { code: INVALID_PARAMS, message: error.message } };
+		}
+		if (error instanceof McpToolNotFoundError) {
+			return { jsonrpc: "2.0", id, error: { code: METHOD_NOT_FOUND, message: error.message } };
+		}
 		return {
 			jsonrpc: "2.0",
 			id,

@@ -9,14 +9,26 @@
  *                      (ooxml_package_part)
  */
 
+import { type OAuthHelpers, OAuthProvider } from "@cloudflare/workers-oauth-provider";
 import { createDb } from "./db";
 import { embedQuery } from "./embeddings";
-import { handleMcpRequest, TOOLS } from "./mcp";
-import { OOXML_TOOL_DEFS } from "./ooxml-tools";
+import { executeMcpTool } from "./mcp";
+import {
+	createAuthenticatedMcpHandler,
+	createDatabaseUsageRecorder,
+	isMcpAuthorizationProps,
+	MCP_RESOURCE_URL,
+	type McpAuthorizationProps,
+} from "./mcp-auth";
+import { authenticateClerkUser, handleAuthorizationRequest } from "./oauth-authorization";
 
 export interface Env {
 	DATABASE_URL: string;
 	VOYAGE_API_KEY: string;
+	CLERK_PUBLISHABLE_KEY: string;
+	CLERK_SECRET_KEY: string;
+	OAUTH_KV: KVNamespace;
+	OAUTH_PROVIDER: OAuthHelpers;
 }
 
 // Part descriptions
@@ -31,7 +43,7 @@ const PART_DESCRIPTIONS: Record<number, string> = {
 const ALLOWED_ORIGINS = ["https://ooxml.dev", "https://www.ooxml.dev"];
 const DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"];
 
-function getCorsHeaders(request: Request, _env: Env): Record<string, string> {
+function getCorsHeaders(request: Request): Record<string, string> {
 	const origin = request.headers.get("Origin");
 	if (!origin) return {};
 
@@ -42,7 +54,8 @@ function getCorsHeaders(request: Request, _env: Env): Record<string, string> {
 		return {
 			"Access-Control-Allow-Origin": origin,
 			"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-			"Access-Control-Allow-Headers": "Content-Type",
+			"Access-Control-Allow-Headers":
+				"Authorization, Content-Type, MCP-Protocol-Version, Mcp-Method, Mcp-Name",
 		};
 	}
 
@@ -63,12 +76,32 @@ function addCorsHeaders(response: Response, corsHeaders: Record<string, string>)
 	});
 }
 
-export default {
-	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-		const url = new URL(request.url);
-		const corsHeaders = getCorsHeaders(request, env);
+type OAuthExecutionContext = ExecutionContext & { props?: McpAuthorizationProps };
 
-		// Log request origin for observability
+const mcpApiHandler = {
+	async fetch(request: Request, env: Env, context: ExecutionContext) {
+		if (new URL(request.url).pathname !== "/mcp") return new Response("Not found", { status: 404 });
+
+		const props = (context as OAuthExecutionContext).props;
+		if (!isMcpAuthorizationProps(props)) {
+			console.error("OAuth provider did not supply valid MCP authorization props");
+			return new Response("Authenticated identity is unavailable", { status: 500 });
+		}
+
+		const handler = createAuthenticatedMcpHandler({
+			usageRecorder: createDatabaseUsageRecorder(env.DATABASE_URL),
+			toolExecutor: (name, args) => executeMcpTool(name, args, env),
+			waitUntil: (promise) => context.waitUntil(promise),
+		});
+		return addCorsHeaders(await handler(request, props), getCorsHeaders(request));
+	},
+} satisfies ExportedHandler<Env>;
+
+const defaultHandler = {
+	async fetch(request: Request, env: Env) {
+		const url = new URL(request.url);
+		const corsHeaders = getCorsHeaders(request);
+
 		console.log("incoming request", {
 			method: request.method,
 			path: url.pathname,
@@ -80,130 +113,66 @@ export default {
 			host: request.headers.get("Host") || "unknown",
 		});
 
-		// Handle CORS preflight
-		if (request.method === "OPTIONS") {
-			return new Response(null, {
-				status: 204,
-				headers: corsHeaders,
+		if (url.pathname === "/authorize") {
+			return handleAuthorizationRequest(request, {
+				oauth: env.OAUTH_PROVIDER,
+				authenticateUser: (authorizationRequest) =>
+					authenticateClerkUser(authorizationRequest, env),
 			});
 		}
 
-		// Health check
+		if (request.method === "OPTIONS") {
+			return new Response(null, { status: 204, headers: corsHeaders });
+		}
+
 		if (url.pathname === "/health") {
-			return addCorsHeaders(
-				new Response(JSON.stringify({ status: "ok" }), {
-					headers: { "Content-Type": "application/json" },
-				}),
-				corsHeaders,
-			);
+			return addCorsHeaders(Response.json({ status: "ok" }), corsHeaders);
 		}
 
-		// MCP endpoint
-		if (url.pathname === "/mcp" || url.pathname === "/sse") {
-			if (request.method === "POST") {
-				// MCP protocol (JSON-RPC)
-				const response = await handleMcpRequest(request, env);
-				return addCorsHeaders(response, corsHeaders);
-			}
-
-			if (request.method === "GET") {
-				const accept = request.headers.get("Accept") || "";
-
-				// MCP Streamable HTTP: return SSE stream for clients expecting event-stream
-				if (accept.includes("text/event-stream")) {
-					const { readable, writable } = new TransformStream();
-					const writer = writable.getWriter();
-					const encoder = new TextEncoder();
-
-					ctx.waitUntil(
-						(async () => {
-							try {
-								// Initial keepalive
-								await writer.write(encoder.encode(":ok\n\n"));
-								// Send keepalive every 30s to hold connection open
-								while (true) {
-									await new Promise((resolve) => setTimeout(resolve, 30000));
-									await writer.write(encoder.encode(":keepalive\n\n"));
-								}
-							} catch {
-								// Client disconnected — stream closed
-							}
-						})(),
-					);
-
-					request.signal.addEventListener("abort", () => {
-						writer.close().catch(() => {});
-					});
-
-					return addCorsHeaders(
-						new Response(readable, {
-							headers: {
-								"Content-Type": "text/event-stream",
-								"Cache-Control": "no-cache",
-							},
-						}),
-						corsHeaders,
-					);
-				}
-
-				// Non-SSE GET returns server info for debugging
-				return addCorsHeaders(handleMcpInfo(), corsHeaders);
-			}
-		}
-
-		// REST API endpoints
 		if (url.pathname === "/search" && request.method === "POST") {
-			const response = await handleSearch(request, env);
-			return addCorsHeaders(response, corsHeaders);
+			return addCorsHeaders(await handleSearch(request, env), corsHeaders);
 		}
 
 		if (url.pathname === "/section" && request.method === "GET") {
-			const response = await handleGetSection(request, env);
-			return addCorsHeaders(response, corsHeaders);
+			return addCorsHeaders(await handleGetSection(request, env), corsHeaders);
 		}
 
 		if (url.pathname === "/stats") {
-			const response = await handleStats(env);
-			return addCorsHeaders(response, corsHeaders);
+			return addCorsHeaders(await handleStats(env), corsHeaders);
 		}
 
 		return addCorsHeaders(
-			new Response(
-				JSON.stringify({
-					name: "OOXML Reference MCP Server",
-					version: "0.1.0",
-					endpoints: {
-						mcp: "/mcp",
-						health: "/health",
-						search: "POST /search",
-						section: "GET /section?id=17.3.2&part=1",
-						stats: "/stats",
-					},
-				}),
-				{
-					headers: { "Content-Type": "application/json" },
+			Response.json({
+				name: "OOXML Reference MCP Server",
+				version: "0.1.0",
+				endpoints: {
+					mcp: "/mcp",
+					health: "/health",
+					search: "POST /search",
+					section: "GET /section?id=17.3.2&part=1",
+					stats: "/stats",
 				},
-			),
+			}),
 			corsHeaders,
 		);
 	},
-};
+} satisfies ExportedHandler<Env>;
 
-// MCP info endpoint (GET for debugging). Tool list is derived from the same
-// canonical exports as the JSON-RPC tools/list response so they can't drift.
-function handleMcpInfo(): Response {
-	return new Response(
-		JSON.stringify({
-			name: "ooxml",
-			version: "0.1.0",
-			description: "OOXML (ECMA-376) reference server: prose search + schema lookup",
-			tools: [...TOOLS, ...OOXML_TOOL_DEFS],
-		}),
-		{
-			headers: { "Content-Type": "application/json" },
-		},
-	);
-}
+export default new OAuthProvider<Env>({
+	apiRoute: "/mcp",
+	apiHandler: mcpApiHandler,
+	defaultHandler,
+	authorizeEndpoint: "/authorize",
+	tokenEndpoint: "/oauth/token",
+	clientRegistrationEndpoint: "/oauth/register",
+	clientIdMetadataDocumentEnabled: true,
+	scopesSupported: ["profile"],
+	resourceMetadata: {
+		resource: MCP_RESOURCE_URL,
+		scopes_supported: ["profile"],
+		resource_name: "OOXML Reference MCP Server",
+	},
+});
 
 // REST API handlers for testing
 async function handleSearch(request: Request, env: Env): Promise<Response> {
