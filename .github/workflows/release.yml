@@ -5,41 +5,20 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "apps/**"
-      - "packages/**"
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
-  release:
+  release-please:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      issues: write
-      pull-requests: write
-
     steps:
-      - uses: actions/checkout@v6
+      # RELEASE_PLEASE_TOKEN (PAT or GitHub App token) lets CI and cubic run on the
+      # release PR; the default github.token cannot trigger other workflows, which
+      # would leave the required "check" status missing on release PRs.
+      - uses: googleapis/release-please-action@v4
         with:
-          fetch-depth: 0
-
-      - uses: oven-sh/setup-bun@v2
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: "lts/*"
-
-      - run: bun install
-
-      - name: Release MCP Server
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HUSKY: 0
-        working-directory: apps/mcp-server
-        run: bunx semantic-release
-
-      - name: Release Web
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HUSKY: 0
-        working-directory: apps/web
-        run: bunx semantic-release
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
