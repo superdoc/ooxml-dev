@@ -92,3 +92,16 @@ bun run deploy
 ```
 
 Database setup, ingest pipelines, and tests live at the repo root — see the top-level `README.md`.
+
+## Authenticated MCP v2 spike
+
+`/mcp-v2` is a protected, experimental route using MCP `2026-07-28` and Clerk. It stays separate from the public `/mcp` route so the new auth flow can be proven before it replaces the existing server.
+
+For now it exposes only `ooxml_whoami`. A successful call writes a Cloudflare log event with the Clerk user ID, client ID, tool name, surface, and time. It does not record tokens or tool arguments.
+
+```bash
+bun test tests/mcp-server/mcp-v2-auth.test.ts
+OOXML_MCP_TOKEN=... bun run mcp:v2:probe
+```
+
+The automated test signs a short-lived token and verifies it with Clerk's real JWT verifier. The probe is the final check with a Clerk-issued user token.

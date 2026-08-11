@@ -12,11 +12,14 @@
 import { createDb } from "./db";
 import { embedQuery } from "./embeddings";
 import { handleMcpRequest, TOOLS } from "./mcp";
+import { createClerkTokenVerifier, createConsoleUsageRecorder, createMcpV2Handler } from "./mcp-v2";
 import { OOXML_TOOL_DEFS } from "./ooxml-tools";
 
 export interface Env {
 	DATABASE_URL: string;
 	VOYAGE_API_KEY: string;
+	CLERK_SECRET_KEY: string;
+	CLERK_AUTHORIZED_PARTIES?: string;
 }
 
 // Part descriptions
@@ -42,7 +45,8 @@ function getCorsHeaders(request: Request, _env: Env): Record<string, string> {
 		return {
 			"Access-Control-Allow-Origin": origin,
 			"Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-			"Access-Control-Allow-Headers": "Content-Type",
+			"Access-Control-Allow-Headers":
+				"Authorization, Content-Type, MCP-Protocol-Version, Mcp-Method, Mcp-Name",
 		};
 	}
 
@@ -99,6 +103,19 @@ export default {
 		}
 
 		// MCP endpoint
+		if (url.pathname === "/mcp-v2") {
+			const handler = createMcpV2Handler({
+				verifier: createClerkTokenVerifier({
+					secretKey: env.CLERK_SECRET_KEY,
+					authorizedParties: env.CLERK_AUTHORIZED_PARTIES?.split(",")
+						.map((party) => party.trim())
+						.filter(Boolean),
+				}),
+				usageRecorder: createConsoleUsageRecorder(),
+			});
+			return addCorsHeaders(await handler(request), corsHeaders);
+		}
+
 		if (url.pathname === "/mcp" || url.pathname === "/sse") {
 			if (request.method === "POST") {
 				// MCP protocol (JSON-RPC)

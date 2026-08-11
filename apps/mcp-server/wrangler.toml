@@ -12,6 +12,7 @@ routes = [
 # Secrets (set via wrangler secret):
 # wrangler secret put DATABASE_URL
 # wrangler secret put VOYAGE_API_KEY
+# wrangler secret put CLERK_SECRET_KEY
 
 [observability]
 enabled = true
@@ -19,3 +20,4 @@ head_sampling_rate = 1
 
 [vars]
 # Non-secret environment variables can go here
+# CLERK_AUTHORIZED_PARTIES = "https://ooxml.dev,https://www.ooxml.dev"
