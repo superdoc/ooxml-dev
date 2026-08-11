@@ -1,10 +1,15 @@
 /**
  * Database Upload Script
  *
- * Uploads embedded chunks to the database.
+ * Uploads embedded chunks to the database. By default this REPLACES the part:
+ * existing rows for that part number are deleted in the same transaction as the
+ * insert, so re-ingesting never leaves duplicate rows behind for search to hit.
  *
  * Usage:
- *   bun scripts/ingest-pdf/upload.ts <part-number> <embedded-file>
+ *   bun scripts/ingest-pdf/upload.ts <part-number> <embedded-file> [--append]
+ *
+ * Options:
+ *   --append - keep existing rows for the part (adds to them instead of replacing)
  *
  * Environment variables:
  *   DATABASE_URL - PostgreSQL connection string
@@ -27,10 +32,15 @@ interface EmbeddedChunk {
 }
 
 async function main() {
-	const args = process.argv.slice(2);
+	const argv = process.argv.slice(2);
+	const append = argv.includes("--append");
+	const args = argv.filter((arg) => !arg.startsWith("--"));
 
 	if (args.length < 2) {
-		console.log("Usage: bun scripts/ingest-pdf/upload.ts <part-number> <embedded-file>");
+		console.log("Usage: bun scripts/ingest-pdf/upload.ts <part-number> <embedded-file> [--append]");
+		console.log("");
+		console.log("Options:");
+		console.log("  --append - keep existing rows for the part instead of replacing them");
 		console.log("");
 		console.log("Environment variables:");
 		console.log("  DATABASE_URL - PostgreSQL connection string");
@@ -64,30 +74,39 @@ async function main() {
 		console.log("Connecting to database...");
 		const db = createDbClient(databaseUrl);
 
-		// Upload in batches
-		console.log("Uploading...");
+		const items: Omit<SpecContent, "id">[] = chunks.map((chunk) => ({
+			partNumber,
+			sectionId: chunk.sectionId,
+			title: chunk.sectionTitle,
+			content: chunk.content,
+			contentType: chunk.contentType,
+			pageNumber: chunk.pageNumber,
+			embedding: chunk.embedding,
+		}));
+
 		const batchSize = 50;
-		let uploaded = 0;
-
-		for (let i = 0; i < chunks.length; i += batchSize) {
-			const batch = chunks.slice(i, i + batchSize);
-
-			const items: Omit<SpecContent, "id">[] = batch.map((chunk) => ({
-				partNumber,
-				sectionId: chunk.sectionId,
-				title: chunk.sectionTitle,
-				content: chunk.content,
-				contentType: chunk.contentType,
-				pageNumber: chunk.pageNumber,
-				embedding: chunk.embedding,
-			}));
-
-			await db.insertBatch(items);
-			uploaded += batch.length;
-
-			if (uploaded % 200 === 0 || uploaded === chunks.length) {
-				console.log(`  ${uploaded}/${chunks.length}`);
+		const logProgress = (uploaded: number) => {
+			if (uploaded % 200 === 0 || uploaded === items.length) {
+				console.log(`  ${uploaded}/${items.length}`);
 			}
+		};
+
+		if (append) {
+			console.log("Uploading (append mode - existing rows for this part are kept)...");
+			let uploaded = 0;
+			for (let i = 0; i < items.length; i += batchSize) {
+				const batch = items.slice(i, i + batchSize);
+				await db.insertBatch(batch);
+				uploaded += batch.length;
+				logProgress(uploaded);
+			}
+		} else {
+			console.log(`Replacing part ${partNumber} (delete + insert in one transaction)...`);
+			const { deleted } = await db.replacePart(partNumber, items, {
+				batchSize,
+				onProgress: logProgress,
+			});
+			console.log(`  Removed ${deleted} existing row(s) for part ${partNumber}`);
 		}
 
 		// Get stats
