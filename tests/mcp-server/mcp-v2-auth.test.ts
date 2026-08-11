@@ -15,7 +15,9 @@ const RESOURCE_URL = "https://api.ooxml.dev/mcp-v2";
 const METADATA_URL = "https://api.ooxml.dev/.well-known/oauth-protected-resource/mcp-v2";
 const AUTHORIZATION_SERVER = "https://clerk.example";
 
-function oauthVerifier(overrides: Partial<{ clientId: string; expired: boolean }> = {}) {
+function oauthVerifier(
+	overrides: Partial<{ clientId: string; expired: boolean; expiration: number }> = {},
+) {
 	return createClerkOAuthTokenVerifier({
 		secretKey: "unused-in-test",
 		expectedClientId: CLIENT_ID,
@@ -28,7 +30,7 @@ function oauthVerifier(overrides: Partial<{ clientId: string; expired: boolean }
 					scopes: ["profile"],
 					revoked: false,
 					expired: overrides.expired ?? false,
-					expiration: Date.now() + 300_000,
+				expiration: overrides.expiration ?? Date.now() + 300_000,
 				};
 			},
 		},
@@ -124,6 +126,17 @@ test("an OAuth token issued to another client is rejected", async () => {
 
 	expect(response.status).toBe(401);
 	expect(events).toEqual([]);
+});
+
+test("Clerk Backend API expirations are accepted in seconds or milliseconds", async () => {
+	const seconds = Math.floor(Date.now() / 1000) + 300;
+	const secondsAuth = await oauthVerifier({ expiration: seconds }).verifyAccessToken("oat_seconds");
+	const millisecondsAuth = await oauthVerifier({ expiration: seconds * 1000 }).verifyAccessToken(
+		"oat_milliseconds",
+	);
+
+	expect(secondsAuth.expiresAt).toBe(seconds);
+	expect(millisecondsAuth.expiresAt).toBe(seconds);
 });
 test("protected resource metadata points MCP clients to Clerk", async () => {
 	const response = protectedResourceMetadataResponse(new Request(METADATA_URL), {

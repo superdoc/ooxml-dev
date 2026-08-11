@@ -72,10 +72,11 @@ export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OA
 		async verifyAccessToken(token) {
 			try {
 				const verified = await accessTokenClient.verify(token);
+				const expiresAt = tokenExpirationSeconds(token, verified.expiration);
 				if (
 					verified.revoked ||
 					verified.expired ||
-					!verified.expiration ||
+					!expiresAt ||
 					verified.clientId !== options.expectedClientId
 				) {
 					throw new Error("Clerk OAuth token is expired, revoked, or issued to another client");
@@ -85,7 +86,7 @@ export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OA
 					token,
 					clientId: verified.clientId,
 					scopes: verified.scopes,
-					expiresAt: Math.floor(verified.expiration / 1000),
+					expiresAt,
 					resource: new URL(options.expectedResourceUrl),
 					extra: { userId: verified.subject },
 				};
@@ -97,6 +98,28 @@ export function createClerkOAuthTokenVerifier(options: ClerkVerifierOptions): OA
 			}
 		},
 	};
+}
+
+function tokenExpirationSeconds(
+	token: string,
+	verifiedExpiration: number | null,
+): number | undefined {
+	const payloadPart = token.split(".")[1];
+	if (payloadPart) {
+		try {
+			const claims = JSON.parse(Buffer.from(payloadPart, "base64url").toString()) as {
+				exp?: unknown;
+			};
+			if (typeof claims.exp === "number") return claims.exp;
+		} catch {
+			// Opaque tokens use the verified Backend API expiration below.
+		}
+	}
+
+	if (!verifiedExpiration) return undefined;
+	return Math.floor(
+		verifiedExpiration > 10_000_000_000 ? verifiedExpiration / 1000 : verifiedExpiration,
+	);
 }
 
 export function protectedResourceMetadataUrl(resourceUrl: string): string {
