@@ -32,6 +32,14 @@ Each run extracts to `dev/data/extracted/partN/`, chunks to
 `dev/data/chunks/partN-chunks.json`, embeds to
 `dev/data/embedded/partN-embedded.json`, then uploads.
 
+Re-ingesting a part is safe: the upload deletes that part's existing rows and
+inserts the new ones in a single transaction, so search never sees two copies of
+the same passage. Pass `--append` to `pdf:upload` to keep the existing rows
+(only useful when uploading one slice of a part at a time).
+
+Databases ingested before that change may already hold duplicates. Clean them
+with `db/migrations/0007_dedupe_spec_content.sql` (via `bun run db:migrate`).
+
 ## Run individual stages
 
 ```bash
@@ -75,4 +83,15 @@ page. The markers are stripped from stored content and embedding text.
 - `extract.py` - PDF -> section-aware markdown via pymupdf4llm
 - `chunk.ts` - markdown -> 6 KB chunks with section IDs
 - `embed.ts` - chunks -> chunks + 1024-dim embeddings
-- `upload.ts` - bulk insert into `spec_content`
+- `upload.ts` - transactional replace (or `--append` insert) into `spec_content`
+
+## Tests
+
+```bash
+bun run pdf:test
+```
+
+Covers heading parsing - numbered sections, annexes, running headers and
+contents-listing entries - against the markdown shapes pymupdf4llm emits: bold
+runs on older releases, `#`-prefixed headings on newer ones. No PDF or database
+needed.

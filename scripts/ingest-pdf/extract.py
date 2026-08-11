@@ -216,16 +216,43 @@ HEADING_PATTERNS = [
 # numbering fragments start with punctuation.
 TITLE_STARTS_WITH_WORD_RE = re.compile(r"^[A-Za-z0-9(]")
 
-ANNEX_PATTERN = re.compile(
-    r"^(?:#+\s*)?\*{0,2}\s*Annex\s+([A-Z])\b[.\s]*(.*?)\*{0,2}$",
-    re.IGNORECASE,
-)
+# An annex number, its qualifier and its name arrive as one bold run on some
+# pymupdf4llm releases and as three on others:
+#
+#     **Annex A** **(normative)** **Namespaces**
+#     #### **Annex A (normative) Namespaces**
+#
+# Matching the runs individually meant a new marker arrangement leaked `**`
+# into the stored title, so emphasis is stripped before the match instead. The
+# title keeps the qualifier: ("Annex A", "(normative) Namespaces").
+ANNEX_PATTERN = re.compile(r"^Annex\s+([A-Z])\b[.:]?\s*(.*)$", re.IGNORECASE)
+
+# An annex whose name spilled onto the next line carries only its qualifier.
+ANNEX_QUALIFIER_ONLY_RE = re.compile(r"\([^)]*\)")
+
+HEADING_PREFIX_RE = re.compile(r"^#{1,6}\s*")
+EMPHASIS_RE = re.compile(r"\*+|__")
 
 # A table-of-contents entry: leader dots and/or a trailing page number.
 # These render bold in some pymupdf4llm versions and so are indistinguishable
 # from real headings by styling alone - they must be rejected by shape.
 TOC_LEADER_RE = re.compile(r"\.{2,}")
 TOC_TRAILING_PAGE_RE = re.compile(r"[.\s]\d{1,4}\s*$")
+
+
+def strip_emphasis(text: str) -> str:
+    """Drop markdown emphasis markers and collapse the whitespace they leave."""
+    return re.sub(r"\s+", " ", EMPHASIS_RE.sub("", text)).strip()
+
+
+def heading_body(stripped: str) -> str:
+    """A heading line as plain text: no ATX prefix, no emphasis markers."""
+    return strip_emphasis(HEADING_PREFIX_RE.sub("", stripped))
+
+
+def has_heading_markup(stripped: str) -> bool:
+    """True when a line is styled as a heading (ATX prefix or a bold run)."""
+    return stripped.startswith("#") or stripped.startswith("**")
 
 
 def looks_like_toc(title: str, raw_line: str) -> bool:
@@ -246,11 +273,12 @@ def match_heading(stripped: str) -> tuple[str, str] | None:
 
     # A heading carries markdown emphasis. Annex pages repeat a bare "Annex A"
     # as their running header, which is not a heading.
-    has_heading_markup = stripped.startswith("#") or stripped.startswith("**")
+    if not has_heading_markup(stripped):
+        return None
 
-    annex = ANNEX_PATTERN.match(stripped)
-    if annex and has_heading_markup:
-        title = annex.group(2).strip().strip("*").strip()
+    annex = ANNEX_PATTERN.match(heading_body(stripped))
+    if annex:
+        title = annex.group(2).strip()
         if not title or looks_like_toc(title, stripped):
             return None
         return f"Annex {annex.group(1).upper()}", title
@@ -260,7 +288,7 @@ def match_heading(stripped: str) -> tuple[str, str] | None:
         if not match:
             continue
 
-        section_id, title = match.group(1), (match.group(2) or "").strip()
+        section_id, title = match.group(1), strip_emphasis(match.group(2) or "")
         if not title or not TITLE_STARTS_WITH_WORD_RE.match(title):
             return None
         if looks_like_toc(title, stripped):
@@ -268,6 +296,36 @@ def match_heading(stripped: str) -> tuple[str, str] | None:
         return section_id, title
 
     return None
+
+
+def needs_title_continuation(section_id: str, title: str) -> bool:
+    """
+    True when an annex heading carries no name beyond its qualifier.
+
+    `**Annex A** **(normative)**` with `**Namespaces**` on the following line is
+    one heading split in two, so the name is picked up by `title_continuation`.
+    """
+    if not section_id.lower().startswith("annex"):
+        return False
+
+    return ANNEX_QUALIFIER_ONLY_RE.fullmatch(title) is not None
+
+
+def title_continuation(stripped: str) -> str | None:
+    """
+    Return the trailing run of a heading whose title spilled onto the next line.
+
+    Only a styled run that doesn't open with a number qualifies, which keeps the
+    annex body - and the next heading - out of the title.
+    """
+    if not has_heading_markup(stripped) or match_heading(stripped) is not None:
+        return None
+
+    text = heading_body(stripped)
+    if not text or not TITLE_STARTS_WITH_WORD_RE.match(text) or text[0].isdigit():
+        return None
+
+    return text
 
 
 def parse_sections(md_text: str, page_offset: int = 0) -> list[dict]:
@@ -283,6 +341,7 @@ def parse_sections(md_text: str, page_offset: int = 0) -> list[dict]:
     current_section = None
     current_content: list[str] = []
     current_physical = 1
+    awaiting_title = False
 
     def printed_page() -> int:
         return max(1, current_physical - page_offset)
@@ -301,6 +360,17 @@ def parse_sections(md_text: str, page_offset: int = 0) -> list[dict]:
             continue
 
         heading = match_heading(stripped)
+
+        # An annex name can land on the line after its number and qualifier.
+        # Only the first non-blank line after such a heading is considered, so
+        # the annex body can never be mistaken for the rest of the title.
+        if heading is None and awaiting_title and stripped:
+            awaiting_title = False
+            continuation = title_continuation(stripped)
+            if continuation:
+                current_section["title"] = f"{current_section['title']} {continuation}".strip()
+                current_content.append(line)
+                continue
 
         if heading:
             # Save previous section
@@ -326,6 +396,7 @@ def parse_sections(md_text: str, page_offset: int = 0) -> list[dict]:
                 "parentId": get_parent_section_id(section_id),
             }
             current_content = [line]
+            awaiting_title = needs_title_continuation(section_id, title)
         elif current_section:
             current_content.append(line)
 
