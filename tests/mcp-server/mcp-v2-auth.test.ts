@@ -1,32 +1,43 @@
 import { expect, test } from "bun:test";
-import { exportSPKI, generateKeyPair, SignJWT } from "jose";
 import {
-	createClerkTokenVerifier,
+	createClerkOAuthTokenVerifier,
 	createMcpV2Handler,
 	MCP_V2_PROTOCOL_VERSION,
 	MCP_V2_TOOL_NAME,
+	protectedResourceMetadataResponse,
+	protectedResourceMetadataUrl,
 	type UsageEvent,
 } from "../../apps/mcp-server/src/mcp-v2.ts";
 
-const AUTHORIZED_PARTY = "http://localhost:8787";
 const USER_ID = "user_test_mcp_v2";
+const CLIENT_ID = "ooxml_cli_test";
+const RESOURCE_URL = "https://api.ooxml.dev/mcp-v2";
+const METADATA_URL = "https://api.ooxml.dev/.well-known/oauth-protected-resource/mcp-v2";
+const AUTHORIZATION_SERVER = "https://clerk.example";
 
-async function signedClerkToken(authorizedParty = AUTHORIZED_PARTY) {
-	const { privateKey, publicKey } = await generateKeyPair("RS256", { extractable: true });
-	const jwtKey = await exportSPKI(publicKey);
-	const now = Math.floor(Date.now() / 1000);
-	const token = await new SignJWT({
-		sub: USER_ID,
-		sid: "sess_test_mcp_v2",
-		azp: authorizedParty,
-	})
-		.setProtectedHeader({ alg: "RS256", kid: "test-key" })
-		.setIssuer("https://clerk.test")
-		.setIssuedAt(now)
-		.setExpirationTime(now + 300)
-		.sign(privateKey);
+function oauthVerifier(overrides: Partial<{ clientId: string; expired: boolean }> = {}) {
+	return createClerkOAuthTokenVerifier({
+		secretKey: "unused-in-test",
+		expectedClientId: CLIENT_ID,
+		expectedResourceUrl: RESOURCE_URL,
+		accessTokenClient: {
+			async verify() {
+				return {
+					clientId: overrides.clientId ?? CLIENT_ID,
+					subject: USER_ID,
+					scopes: ["profile"],
+					revoked: false,
+					expired: overrides.expired ?? false,
+					expiration: Date.now() + 300_000,
+				};
+			},
+		},
+	});
+}
 
-	return { jwtKey, token };
+function accessToken(audience = RESOURCE_URL): string {
+	const encoded = Buffer.from(JSON.stringify({ aud: audience })).toString("base64url");
+	return `header.${encoded}.signature`;
 }
 
 function toolCall(token?: string): Request {
@@ -38,7 +49,7 @@ function toolCall(token?: string): Request {
 	});
 	if (token) headers.set("Authorization", `Bearer ${token}`);
 
-	return new Request("http://localhost:8787/mcp-v2", {
+	return new Request(RESOURCE_URL, {
 		method: "POST",
 		headers,
 		body: JSON.stringify({
@@ -61,20 +72,18 @@ function toolCall(token?: string): Request {
 	});
 }
 
-test("a verified Clerk identity reaches an MCP 2026-07-28 tool and usage recorder", async () => {
+test("a verified Clerk OAuth identity reaches MCP 2026-07-28 and the usage recorder", async () => {
 	expect(MCP_V2_PROTOCOL_VERSION).toBe("2026-07-28");
-	const { jwtKey, token } = await signedClerkToken();
+	expect(protectedResourceMetadataUrl(RESOURCE_URL)).toBe(METADATA_URL);
 	const events: UsageEvent[] = [];
 	const handler = createMcpV2Handler({
-		verifier: createClerkTokenVerifier({
-			jwtKey,
-			authorizedParties: [AUTHORIZED_PARTY],
-		}),
+		verifier: oauthVerifier(),
 		usageRecorder: { record: (event) => events.push(event) },
+		resourceMetadataUrl: METADATA_URL,
 		now: () => new Date("2026-08-11T12:00:00.000Z"),
 	});
 
-	const response = await handler(toolCall(token));
+	const response = await handler(toolCall(accessToken()));
 	const body = (await response.json()) as {
 		result?: { resultType?: string; content?: Array<{ text?: string }> };
 	};
@@ -87,38 +96,69 @@ test("a verified Clerk identity reaches an MCP 2026-07-28 tool and usage recorde
 			userId: USER_ID,
 			tool: MCP_V2_TOOL_NAME,
 			surface: "mcp-v2",
-			client: AUTHORIZED_PARTY,
+			client: CLIENT_ID,
 			occurredAt: "2026-08-11T12:00:00.000Z",
 		},
 	]);
 });
 
-test("the MCP v2 route rejects a missing bearer token", async () => {
-	const { jwtKey } = await signedClerkToken();
+test("a missing token returns a discoverable OAuth challenge", async () => {
 	const handler = createMcpV2Handler({
-		verifier: createClerkTokenVerifier({ jwtKey }),
+		verifier: oauthVerifier(),
 		usageRecorder: { record: () => {} },
+		resourceMetadataUrl: METADATA_URL,
 	});
 
 	const response = await handler(toolCall());
+	const challenge = response.headers.get("WWW-Authenticate");
 
 	expect(response.status).toBe(401);
-	expect(response.headers.get("WWW-Authenticate")).toContain("Bearer");
+	expect(challenge).toContain("Bearer");
+	expect(challenge).toContain(`resource_metadata="${METADATA_URL}"`);
 });
 
-test("the MCP v2 route rejects a token from another authorized party", async () => {
-	const { jwtKey, token } = await signedClerkToken("https://other.example");
+test("an OAuth token issued to another client is rejected", async () => {
 	const events: UsageEvent[] = [];
 	const handler = createMcpV2Handler({
-		verifier: createClerkTokenVerifier({
-			jwtKey,
-			authorizedParties: [AUTHORIZED_PARTY],
-		}),
+		verifier: oauthVerifier({ clientId: "another_client" }),
 		usageRecorder: { record: (event) => events.push(event) },
+		resourceMetadataUrl: METADATA_URL,
 	});
 
-	const response = await handler(toolCall(token));
+	const response = await handler(toolCall(accessToken()));
 
 	expect(response.status).toBe(401);
 	expect(events).toEqual([]);
+});
+
+test("an OAuth token issued for another resource is rejected", async () => {
+	const handler = createMcpV2Handler({
+		verifier: oauthVerifier(),
+		usageRecorder: { record: () => {} },
+		resourceMetadataUrl: METADATA_URL,
+	});
+
+	const response = await handler(toolCall(accessToken("https://other.example/mcp")));
+
+	expect(response.status).toBe(401);
+});
+
+test("protected resource metadata points MCP clients to Clerk", async () => {
+	const response = protectedResourceMetadataResponse(new Request(METADATA_URL), {
+		resourceUrl: RESOURCE_URL,
+		authorizationServer: AUTHORIZATION_SERVER,
+	});
+	const body = (await response.json()) as {
+		resource?: string;
+		authorization_servers?: string[];
+		scopes_supported?: string[];
+	};
+
+	expect(response.status).toBe(200);
+	expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
+	expect(body).toMatchObject({
+		resource: RESOURCE_URL,
+		authorization_servers: [AUTHORIZATION_SERVER],
+		scopes_supported: ["profile"],
+	});
 });

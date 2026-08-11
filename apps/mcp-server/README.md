@@ -101,7 +101,9 @@ For now it exposes only `ooxml_whoami`. A successful call writes a Cloudflare lo
 
 ```bash
 bun test tests/mcp-server/mcp-v2-auth.test.ts
-OOXML_MCP_TOKEN=... bun run mcp:v2:probe
+bun run mcp:v2:login
 ```
 
-The automated test signs a short-lived token and verifies it with Clerk's real JWT verifier. The probe is the final check with a Clerk-issued user token.
+`mcp:v2:login` opens Clerk in the browser, uses Authorization Code with PKCE, receives the access token on a fixed loopback callback, and calls the deployed MCP tool. Tokens are held only in memory and are never printed.
+
+The OAuth discovery path is `/.well-known/oauth-protected-resource/mcp-v2`. The public Clerk client currently allows only `http://127.0.0.1:45879/callback`; keeping one fixed callback makes this first CLI proof easy to verify before designing the distributable CLI.

@@ -21,6 +21,7 @@
     "db:shell": "docker compose exec db psql -U postgres -d ecma_spec",
     "db:migrate": "bun scripts/db-migrate.ts",
     "mcp:v2:probe": "bun scripts/probe-mcp-v2.ts",
+    "mcp:v2:login": "bun scripts/login-mcp-v2.ts",
     "sources:sync": "bun scripts/sources-sync.ts",
     "pdf:ingest": "bun scripts/ingest-pdf/pipeline.ts",
     "pdf:chunk": "bun scripts/ingest-pdf/chunk.ts",
@@ -38,7 +39,6 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.2",
     "fast-xml-parser": "^5.7.2",
-    "jose": "^6.2.8",
     "lefthook": "^2.0.16",
     "semantic-release": "^25.0.2",
     "typescript": "~5.9.3"

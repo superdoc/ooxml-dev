@@ -19,5 +19,6 @@ enabled = true
 head_sampling_rate = 1
 
 [vars]
-# Non-secret environment variables can go here
-# CLERK_AUTHORIZED_PARTIES = "https://ooxml.dev,https://www.ooxml.dev"
+CLERK_OAUTH_CLIENT_ID = "ywoNOfxsoQ8Dw1FW"
+CLERK_OAUTH_ISSUER = "https://glad-beetle-33.clerk.accounts.dev"
+MCP_V2_RESOURCE_URL = "https://api.ooxml.dev/mcp-v2"

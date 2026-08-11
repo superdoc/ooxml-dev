@@ -12,14 +12,22 @@
 import { createDb } from "./db";
 import { embedQuery } from "./embeddings";
 import { handleMcpRequest, TOOLS } from "./mcp";
-import { createClerkTokenVerifier, createConsoleUsageRecorder, createMcpV2Handler } from "./mcp-v2";
+import {
+	createClerkOAuthTokenVerifier,
+	createConsoleUsageRecorder,
+	createMcpV2Handler,
+	protectedResourceMetadataResponse,
+	protectedResourceMetadataUrl,
+} from "./mcp-v2";
 import { OOXML_TOOL_DEFS } from "./ooxml-tools";
 
 export interface Env {
 	DATABASE_URL: string;
 	VOYAGE_API_KEY: string;
 	CLERK_SECRET_KEY: string;
-	CLERK_AUTHORIZED_PARTIES?: string;
+	CLERK_OAUTH_CLIENT_ID: string;
+	CLERK_OAUTH_ISSUER: string;
+	MCP_V2_RESOURCE_URL: string;
 }
 
 // Part descriptions
@@ -71,6 +79,7 @@ export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
 		const url = new URL(request.url);
 		const corsHeaders = getCorsHeaders(request, env);
+		const resourceMetadataUrl = protectedResourceMetadataUrl(env.MCP_V2_RESOURCE_URL);
 
 		// Log request origin for observability
 		console.log("incoming request", {
@@ -83,6 +92,13 @@ export default {
 			country: request.headers.get("CF-IPCountry") || "unknown",
 			host: request.headers.get("Host") || "unknown",
 		});
+
+		if (url.pathname === new URL(resourceMetadataUrl).pathname) {
+			return protectedResourceMetadataResponse(request, {
+				resourceUrl: env.MCP_V2_RESOURCE_URL,
+				authorizationServer: env.CLERK_OAUTH_ISSUER,
+			});
+		}
 
 		// Handle CORS preflight
 		if (request.method === "OPTIONS") {
@@ -105,13 +121,13 @@ export default {
 		// MCP endpoint
 		if (url.pathname === "/mcp-v2") {
 			const handler = createMcpV2Handler({
-				verifier: createClerkTokenVerifier({
+				verifier: createClerkOAuthTokenVerifier({
 					secretKey: env.CLERK_SECRET_KEY,
-					authorizedParties: env.CLERK_AUTHORIZED_PARTIES?.split(",")
-						.map((party) => party.trim())
-						.filter(Boolean),
+					expectedClientId: env.CLERK_OAUTH_CLIENT_ID,
+					expectedResourceUrl: env.MCP_V2_RESOURCE_URL,
 				}),
 				usageRecorder: createConsoleUsageRecorder(),
+				resourceMetadataUrl,
 			});
 			return addCorsHeaders(await handler(request), corsHeaders);
 		}
