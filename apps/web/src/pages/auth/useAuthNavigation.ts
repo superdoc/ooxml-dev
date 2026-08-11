@@ -10,16 +10,17 @@ interface FinalizeNavigationParams {
 type UrlDecorator = (url: string) => string;
 
 const keepUrl = (url: string) => url;
-const MCP_AUTHORIZATION_ORIGIN = "https://api.ooxml.dev";
+const DEFAULT_MCP_API_URL = "https://api.ooxml.dev";
 
-function isMcpAuthorizationRedirect(destination: URL): boolean {
-	return destination.origin === MCP_AUTHORIZATION_ORIGIN && destination.pathname === "/authorize";
+function isMcpAuthorizationRedirect(destination: URL, mcpApiUrl: string): boolean {
+	return destination.origin === new URL(mcpApiUrl).origin && destination.pathname === "/authorize";
 }
 
 export function safeRequestedRedirect(
 	frontendApi: string,
 	requested: string | null,
 	currentOrigin: string,
+	mcpApiUrl = DEFAULT_MCP_API_URL,
 ): string {
 	if (!requested) return "/";
 
@@ -35,14 +36,17 @@ export function safeRequestedRedirect(
 			destination.origin !== currentOrigin &&
 			destination.origin !== clerkOrigin &&
 			destination.origin !== accountsOrigin &&
-			!isMcpAuthorizationRedirect(destination)
+			!isMcpAuthorizationRedirect(destination, mcpApiUrl)
 		) {
 			return "/";
 		}
 
-		return destination.origin === currentOrigin
-			? `${destination.pathname}${destination.search}${destination.hash}`
-			: destination.toString();
+		if (destination.origin !== currentOrigin) return destination.toString();
+
+		// A path beginning with `//` is reinterpreted as a different host when it is
+		// later passed back to URL. Keep same-origin redirects as local paths.
+		const pathname = destination.pathname.replace(/^\/+/, "/");
+		return `${pathname}${destination.search}${destination.hash}`;
 	} catch {
 		return "/";
 	}
@@ -58,6 +62,7 @@ function useRequestedRedirectNavigation() {
 				clerk.frontendApi,
 				new URLSearchParams(window.location.search).get("redirect_url"),
 				window.location.origin,
+				import.meta.env.VITE_API_URL ?? DEFAULT_MCP_API_URL,
 			);
 			const decorated = decorateUrl(requested);
 			const destination = new URL(decorated, window.location.origin);

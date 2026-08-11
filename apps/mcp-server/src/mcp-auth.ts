@@ -28,6 +28,8 @@ interface AuthenticatedMcpOptions {
 	usageRecorder: UsageRecorder;
 	toolExecutor: (name: string, args: Record<string, unknown>) => Promise<string>;
 	now?: () => Date;
+	waitUntil?: (promise: Promise<void>) => void;
+	onUsageError?: (error: unknown) => void;
 }
 
 type ToolProperty = {
@@ -84,6 +86,24 @@ export function createDatabaseUsageRecorder(connectionString: string): UsageReco
 	};
 }
 
+function recordUsage(options: AuthenticatedMcpOptions, event: UsageEvent): void {
+	const reportError = (error: unknown) => {
+		if (options.onUsageError) options.onUsageError(error);
+		else console.error("Failed to record MCP usage", error);
+	};
+
+	let recording: void | Promise<void>;
+	try {
+		recording = options.usageRecorder.record(event);
+	} catch (error) {
+		reportError(error);
+		return;
+	}
+
+	const completed = Promise.resolve(recording).catch(reportError);
+	options.waitUntil?.(completed);
+}
+
 export function createAuthenticatedMcpHandler(options: AuthenticatedMcpOptions) {
 	const now = options.now ?? (() => new Date());
 	const handler = createMcpHandler(
@@ -100,7 +120,7 @@ export function createAuthenticatedMcpHandler(options: AuthenticatedMcpOptions) 
 					},
 					async (args) => {
 						const text = await options.toolExecutor(tool.name, args);
-						await options.usageRecorder.record({
+						recordUsage(options, {
 							userId: identity.userId,
 							tool: tool.name,
 							surface: "mcp",

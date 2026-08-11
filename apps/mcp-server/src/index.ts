@@ -91,6 +91,7 @@ const mcpApiHandler = {
 		const handler = createAuthenticatedMcpHandler({
 			usageRecorder: createDatabaseUsageRecorder(env.DATABASE_URL),
 			toolExecutor: (name, args) => executeMcpTool(name, args, env),
+			waitUntil: (promise) => context.waitUntil(promise),
 		});
 		return addCorsHeaders(await handler(request, props), getCorsHeaders(request));
 	},

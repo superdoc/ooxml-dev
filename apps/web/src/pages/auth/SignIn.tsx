@@ -96,6 +96,7 @@ export function SignIn() {
 	}
 
 	async function changeEmail() {
+		if (isLoading) return;
 		await signIn.reset();
 		setCode("");
 		setLocalError(undefined);
@@ -116,7 +117,12 @@ export function SignIn() {
 					footer={
 						<>
 							Wrong email?{" "}
-							<button type="button" onClick={changeEmail} className={authLinkClassName}>
+							<button
+								type="button"
+								onClick={changeEmail}
+								disabled={isLoading}
+								className={`${authLinkClassName} disabled:cursor-not-allowed disabled:opacity-60`}
+							>
 								Change it
 							</button>
 						</>
@@ -187,6 +193,7 @@ export function SignIn() {
 						invalid={Boolean(errorMessage)}
 						autoFocus
 					/>
+					<div id="clerk-captcha" />
 					{errorMessage ? <AuthMessage>{errorMessage}</AuthMessage> : null}
 					<AuthSubmitButton disabled={isLoading || !email.trim()}>
 						{isLoading ? "Sending code…" : "Continue"}

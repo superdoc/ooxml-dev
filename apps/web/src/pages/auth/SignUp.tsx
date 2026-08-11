@@ -100,6 +100,7 @@ export function SignUp() {
 	}
 
 	async function changeEmail() {
+		if (isLoading) return;
 		await signUp.reset();
 		setCode("");
 		setLocalError(undefined);
@@ -120,7 +121,12 @@ export function SignUp() {
 					footer={
 						<>
 							Wrong email?{" "}
-							<button type="button" onClick={changeEmail} className={authLinkClassName}>
+							<button
+								type="button"
+								onClick={changeEmail}
+								disabled={isLoading}
+								className={`${authLinkClassName} disabled:cursor-not-allowed disabled:opacity-60`}
+							>
 								Change it
 							</button>
 						</>

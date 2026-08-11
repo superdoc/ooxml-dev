@@ -11,6 +11,7 @@ export default defineConfig(({ mode }) => {
 		process.env.VITE_CLERK_PUBLISHABLE_KEY ??
 		process.env.CLERK_PUBLISHABLE_KEY ??
 		webEnv.VITE_CLERK_PUBLISHABLE_KEY ??
+		webEnv.CLERK_PUBLISHABLE_KEY ??
 		rootEnv.VITE_CLERK_PUBLISHABLE_KEY ??
 		rootEnv.CLERK_PUBLISHABLE_KEY ??
 		"";

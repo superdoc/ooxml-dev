@@ -10,6 +10,18 @@ import {
 
 const USER_ID = "user_test_mcp";
 const CLIENT_ID = "dynamic_client_test";
+const EXPECTED_TOOL_NAMES = [
+	"ooxml_search",
+	"ooxml_section",
+	"ooxml_parts",
+	"ooxml_element",
+	"ooxml_type",
+	"ooxml_children",
+	"ooxml_attributes",
+	"ooxml_enum",
+	"ooxml_namespace",
+	"ooxml_package_part",
+];
 
 const identity: McpAuthorizationProps = {
 	userId: USER_ID,
@@ -119,8 +131,39 @@ test("authenticated tools/list exposes only the public OOXML tools", async () =>
 	const names = body.result?.tools?.map((tool) => tool.name) ?? [];
 
 	expect(response.status).toBe(200);
-	expect(names).toContain("ooxml_element");
-	expect(names).not.toContain("ooxml_whoami");
+	expect(names).toEqual(EXPECTED_TOOL_NAMES);
+});
+
+test("usage recording failures do not discard a successful tool result", async () => {
+	const usageErrors: unknown[] = [];
+	const backgroundTasks: Promise<void>[] = [];
+	const handler = createAuthenticatedMcpHandler({
+		usageRecorder: {
+			async record() {
+				throw new Error("usage database unavailable");
+			},
+		},
+		toolExecutor: async () => "Element w:p",
+		waitUntil: (promise) => backgroundTasks.push(promise),
+		onUsageError: (error) => usageErrors.push(error),
+	});
+
+	const response = await handler(
+		modernRequest("tools/call", {
+			name: "ooxml_element",
+			arguments: { qname: "w:p" },
+		}),
+		identity,
+	);
+	const body = (await response.json()) as {
+		result?: { content?: Array<{ text?: string }> };
+	};
+	await Promise.all(backgroundTasks);
+
+	expect(response.status).toBe(200);
+	expect(body.result?.content?.[0]?.text).toBe("Element w:p");
+	expect(backgroundTasks).toHaveLength(1);
+	expect(usageErrors).toHaveLength(1);
 });
 
 test("authenticated MCP 2024-11-05 clients can initialize through the compatibility path", async () => {
