@@ -12,6 +12,10 @@ export function isSafeAuthorizationUrl(url: URL): boolean {
 	);
 }
 
+export function signInMessage(url: URL): string {
+	return `Opening your browser to sign in…\nIf it does not open, visit:\n${url}`;
+}
+
 function callbackPage(success: boolean): string {
 	const title = success ? "Signed in to ooxml.dev" : "Sign-in failed";
 	const detail = success
@@ -121,12 +125,10 @@ export async function authorizeInBrowser(
 	}
 
 	const callback = await startOAuthCallback(port, (state) => provider.validatesState(state));
-	console.error("Opening your browser to sign in…");
+	console.error(signInMessage(authorizationUrl));
 	try {
 		await open(authorizationUrl.toString());
-	} catch {
-		console.error(`Open this URL in your browser:\n${authorizationUrl}`);
-	}
+	} catch {}
 
 	const params = await callback.result;
 	if (params.get("error")) throw new Error("Sign-in was canceled or denied");

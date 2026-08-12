@@ -1,7 +1,11 @@
 import { expect, test } from "bun:test";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { isSafeAuthorizationUrl, startOAuthCallback } from "../../apps/cli/src/browser-auth";
+import {
+	isSafeAuthorizationUrl,
+	signInMessage,
+	startOAuthCallback,
+} from "../../apps/cli/src/browser-auth";
 
 test("only opens secure or loopback authorization URLs", () => {
 	expect(isSafeAuthorizationUrl(new URL("https://api.ooxml.dev/authorize"))).toBe(true);
@@ -38,4 +42,10 @@ test("ignores callbacks with the wrong state and removes secrets from browser hi
 		code: "secret-code",
 		state: "expected",
 	});
+});
+
+test("prints a manual sign-in URL before waiting for the browser callback", async () => {
+	const message = signInMessage(new URL("https://api.ooxml.dev/authorize"));
+	expect(message).toContain("If it does not open, visit:");
+	expect(message).toContain("https://api.ooxml.dev/authorize");
 });
