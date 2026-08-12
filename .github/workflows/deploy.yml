@@ -29,7 +29,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install
+      - run: bunx --package vite-plus@0.2.9 vp install --frozen-lockfile
 
       - name: Apply database migrations
         run: bun run db:migrate
@@ -48,7 +48,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install
+      - run: bunx --package vite-plus@0.2.9 vp install --frozen-lockfile
 
       - name: Build
         run: bun run build:prod
@@ -75,7 +75,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install
+      - run: bunx --package vite-plus@0.2.9 vp install --frozen-lockfile
 
       - name: Deploy MCP Server
         uses: cloudflare/wrangler-action@v3

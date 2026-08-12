@@ -1,7 +1,7 @@
 {
-	"extends": "../../tsconfig.json",
+	"extends": "../../tsconfig.base.json",
 	"compilerOptions": {
-		"noEmit": true,
+		"skipLibCheck": true,
 		"types": ["@cloudflare/workers-types"]
 	},
 	"include": ["src"]

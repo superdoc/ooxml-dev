@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
-import { defineConfig, loadEnv } from "vite";
+import { defineConfig, loadEnv, lazyPlugins } from "vite-plus";
 
 export default defineConfig(({ mode }) => {
 	const envKeys = ["VITE_CLERK_PUBLISHABLE_KEY", "CLERK_PUBLISHABLE_KEY"];
@@ -17,7 +17,7 @@ export default defineConfig(({ mode }) => {
 		"";
 
 	return {
-		plugins: [tailwindcss(), react()],
+		plugins: lazyPlugins(() => [tailwindcss(), react()]),
 		// The browser only receives Clerk's public key; secret keys remain server-only.
 		define: {
 			"import.meta.env.VITE_CLERK_PUBLISHABLE_KEY": JSON.stringify(clerkPublishableKey),

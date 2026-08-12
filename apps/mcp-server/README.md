@@ -93,7 +93,7 @@ Regenerate the bundled lookup from the pinned Annex D XML with `bun run mcp:pres
 
 ```bash
 # Install (from repo root)
-bun install
+bunx --package vite-plus@0.2.9 vp install --frozen-lockfile
 
 # Local dev — needs .dev.vars with DATABASE_URL and VOYAGE_API_KEY
 bun run dev:mcp

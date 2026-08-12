@@ -160,7 +160,7 @@ export function SpecExplorer() {
 	);
 
 	// Scroll selected item into view
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally scroll when selectedIndex changes
+	// oxlint-disable-next-line react/exhaustive-deps -- Scroll only when the selection changes.
 	useEffect(() => {
 		if (resultsRef.current) {
 			const selected = resultsRef.current.querySelector("[data-selected='true']");

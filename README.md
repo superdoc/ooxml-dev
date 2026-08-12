@@ -68,11 +68,15 @@ Four tool families share one server:
 ## Development
 
 ```bash
-bun install    # Install dependencies
-bun dev        # Dev server at http://localhost:5173
-bun run build  # Production build
-bun run build:prod  # Build with the ignored .env.prod file
+bunx --package vite-plus@0.2.9 vp install --frozen-lockfile  # Install dependencies
+bun dev                                                   # Dev server at http://localhost:5173
+bun run check                                             # Format, lint, and type-check
+bun run build                                             # Production build
+bun run build:prod                                        # Build with .env.prod
 ```
+
+Vite+ owns the web development, build, formatting, linting, workspace task, and Git hook
+workflows. Bun remains the package manager and test runtime because the test suite uses `bun:test`.
 
 `build:prod` requires a live Clerk publishable key. This prevents production deploys from using the
 auth fallback or a test Clerk instance.

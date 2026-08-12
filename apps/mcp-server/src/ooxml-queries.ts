@@ -8,7 +8,7 @@
  * inheritance chains where it matters.
  */
 
-// biome-ignore lint/suspicious/noExplicitAny: tagged-template sql differs between neon and postgres.
+// oxlint-disable-next-line typescript/no-explicit-any -- Neon and Postgres expose different tagged-template types.
 type Sql = any;
 
 /**
