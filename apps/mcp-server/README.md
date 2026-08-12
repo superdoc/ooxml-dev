@@ -5,7 +5,7 @@ Cloudflare Worker that exposes ECMA-376 (Office Open XML) over the Model Context
 - **Prose search** — semantic search across the four ECMA-376 part PDFs (~18,000 chunks, embedded with Voyage, queried with pgvector).
 - **Schema lookup** — deterministic queries over the parsed XSD graph (profiles, namespaces, symbols, content models, attributes, enums).
 - **Package metadata** — curated OPC part-type reference (content types, source relationship types, root namespaces, typical paths in the package).
-- **Preset shapes** — adjust-guide names from the Part 1 Annex D addendum.
+- **Preset shapes** — adjust-guide names extracted from the Part 1 Annex D addendum.
 
 Hosted at `https://api.ooxml.dev/mcp`.
 
@@ -85,7 +85,9 @@ Curated from ECMA-376 Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x. Answers pa
 | --- | --- |
 | `ooxml_preset_shape` | Ordered adjust-guide names for a DrawingML `ST_ShapeType` value |
 
-Curated from the ECMA-376 Fourth Edition, Part 1 Annex D addendum.
+Generated from the ECMA-376 Fourth Edition, Part 1 Annex D addendum.
+
+Regenerate the bundled lookup from the pinned Annex D XML with `bun run mcp:preset-shapes:generate`.
 
 ## Development
 

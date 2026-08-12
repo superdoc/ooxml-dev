@@ -41,7 +41,7 @@ import {
 	type OpcPart,
 	searchParts,
 } from "./opc-parts";
-import { lookupPresetShapeGuides } from "./preset-shape-guides";
+import { lookupPresetShapeGuides } from "./preset-shape-guides.generated";
 
 export const DEFAULT_PROFILE = "transitional";
 
@@ -172,13 +172,13 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 		name: "ooxml_preset_shape",
 		description:
 			"Return the ordered adjust-guide names for a DrawingML preset shape used in `<a:prstGeom>`. " +
-			"The data comes from ECMA-376 Fourth Edition, Part 1 Annex D. Pass the exact `ST_ShapeType` value, such as `round2SameRect`.",
+			"The data is extracted from ECMA-376 Fourth Edition, Part 1 Annex D. Pass the exact preset shape name, such as `round2SameRect`.",
 		inputSchema: {
 			type: "object" as const,
 			properties: {
 				shape: {
 					type: "string",
-					description: 'Exact `ST_ShapeType` value from `<a:prstGeom prst="...">`.',
+					description: 'Exact preset shape name from `<a:prstGeom prst="...">`.',
 				},
 			},
 			required: ["shape"],
@@ -764,9 +764,9 @@ function formatPresetShapeGuides(shape: string, guides: readonly string[]): stri
 
 function formatPresetShapeNotFound(shape: string): string {
 	return [
-		`## Preset shape not found${shape ? `: ${shape}` : ""}`,
+		`## Preset shape not found in Annex D${shape ? `: ${shape}` : ""}`,
 		"",
-		'Pass an exact `ST_ShapeType` value from `<a:prstGeom prst="...">`.',
+		'Check the exact name from `<a:prstGeom prst="...">`.',
 	].join("\n");
 }
 

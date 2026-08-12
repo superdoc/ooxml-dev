@@ -25,6 +25,7 @@
     "db:shell": "docker compose exec db psql -U postgres -d ecma_spec",
     "db:migrate": "bun scripts/db-migrate.ts",
     "mcp:users": "bun --env-file=.env apps/mcp-server/scripts/users.ts",
+    "mcp:preset-shapes:generate": "bun scripts/generate-preset-shape-guides.ts",
     "sources:sync": "bun scripts/sources-sync.ts",
     "pdf:ingest": "bun scripts/ingest-pdf/pipeline.ts",
     "pdf:chunk": "bun scripts/ingest-pdf/chunk.ts",
