@@ -19,4 +19,16 @@ describe("PDF chunk page numbers", () => {
 		expect(chunks.every((chunk) => !chunk.content.includes("<!--page:"))).toBe(true);
 		expect(chunks.every((chunk) => !chunk.embeddingText.includes("<!--page:"))).toBe(true);
 	});
+
+	test("keeps embedding text when stripping removes the whole chunk", () => {
+		const [chunk] = splitIntoChunks(
+			"<!--page:229-->\n\n| Value |\n|---|\n| `<w:ind/>` |",
+			"17.3.1.12",
+			"ind (Paragraph Indentation)",
+			219,
+			10,
+		);
+
+		expect(chunk.embeddingText).not.toBe("");
+	});
 });

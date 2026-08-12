@@ -123,7 +123,7 @@ export function splitIntoChunks(
 			sectionId,
 			sectionTitle,
 			content,
-			embeddingText: stripForEmbedding(content),
+			embeddingText: stripForEmbedding(content) || content,
 			contentType: "text",
 			pageNumber: chunkPage,
 			chunkIndex: chunks.length,
