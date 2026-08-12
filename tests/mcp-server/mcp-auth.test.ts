@@ -21,6 +21,7 @@ const EXPECTED_TOOL_NAMES = [
 	"ooxml_enum",
 	"ooxml_namespace",
 	"ooxml_package_part",
+	"ooxml_preset_shape",
 ];
 
 const identity: McpAuthorizationProps = {

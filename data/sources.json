@@ -45,6 +45,15 @@
       "url": "https://ecma-international.org/wp-content/uploads/ECMA-376-4_5th_edition_december_2016.zip",
       "license_note": "Published by Ecma International. See the ECMA-376 publications page for the current download and licensing terms before redistribution.",
       "sha256": "bd25da1109f73762356596918bf5ff8b74a1331642dba5f1c1d1dfc6bed34ecd"
+    },
+    {
+      "name": "ecma-376-annex-d-drawingml-geometries",
+      "kind": "curated_static",
+      "edition": "4th",
+      "version": "2012-12",
+      "url": "https://ecma-international.org/wp-content/uploads/ECMA-376_4th_edition_december_2012.zip",
+      "license_note": "Adjust-guide names are derived from the published Part 1 Annex D presetShapeDefinitions.xml addendum.",
+      "sha256": "cc7e6cead58205025a0e05e6d339137b99f3add55c435bf98c88987ae85c7f4f"
     }
   ]
 }
