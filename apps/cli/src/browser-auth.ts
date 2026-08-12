@@ -25,9 +25,9 @@ export async function authorizeInBrowser(
 	finishAuth: (params: URLSearchParams) => Promise<void>,
 ): Promise<void> {
 	const authorizationUrl = provider.pendingAuthorizationUrl;
-	if (!authorizationUrl) throw new Error("The MCP server did not provide an authorization URL");
+	if (!authorizationUrl) throw new Error("The OOXML service did not provide a sign-in URL");
 	if (!isSafeAuthorizationUrl(authorizationUrl)) {
-		throw new Error("The MCP server returned an unsafe authorization URL");
+		throw new Error("The OOXML service returned an unsafe sign-in URL");
 	}
 
 	const callback = waitForCallback(port);
@@ -40,9 +40,9 @@ export async function authorizeInBrowser(
 	}
 
 	const params = await callback;
-	if (params.get("error")) throw new Error("Authorization was denied");
+	if (params.get("error")) throw new Error("Sign-in was canceled or denied");
 	if (!provider.validatesState(params.get("state"))) {
-		throw new Error("Authorization callback state did not match");
+		throw new Error("Sign-in could not be verified. Try again.");
 	}
 	await finishAuth(params);
 }
@@ -70,7 +70,9 @@ function waitForCallback(port: number): Promise<URLSearchParams> {
 			if (settled) return;
 			settled = true;
 			clearTimeout(timeout);
-			reject(new Error(`Could not start the OAuth callback on port ${port}`, { cause: error }));
+			reject(
+				new Error(`Could not start the local sign-in callback on port ${port}`, { cause: error }),
+			);
 		});
 
 		const timeout = setTimeout(() => {

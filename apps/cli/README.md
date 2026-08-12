@@ -1,6 +1,8 @@
 # OOXML CLI
 
-The CLI gives people and agents a stable shell interface to the OOXML reference. It uses Clerk sign-in and the hosted OOXML service.
+Use the OOXML reference from a terminal or an agent skill. The CLI signs in with Clerk and sends queries to the hosted ooxml.dev service.
+
+While the package is private, run it from the repository root:
 
 ```bash
 bun run ooxml login
@@ -11,8 +13,10 @@ bun run ooxml attributes w:p
 bun run ooxml logout
 ```
 
-OAuth tokens stay in a user-only local credentials file. Tool inputs and results are not stored.
+For this private test, sign-in credentials are stored in the current user's application data directory. The CLI does not store query inputs or results.
 
-The public commands use OOXML terms. MCP is an internal transport detail and is not part of the CLI contract.
+The bundled [`research-ooxml`](../../skills/research-ooxml/SKILL.md) skill helps agents choose the right commands and combine schema and specification evidence.
 
-This package is private while we test the complete login and query flow. Publishing it to npm is a separate release step.
+MCP is an internal transport detail. It is not part of the CLI or skill interface.
+
+The package is private for this first test. Moving credentials to the operating system's secure store and publishing to npm are separate release steps.

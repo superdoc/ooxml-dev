@@ -80,7 +80,7 @@ export class CliOAuthProvider implements OAuthClientProvider {
 	}
 
 	codeVerifier(): string {
-		if (!this.credentials.verifier) throw new Error("OAuth code verifier is missing");
+		if (!this.credentials.verifier) throw new Error("Sign-in session data is missing");
 		return this.credentials.verifier;
 	}
 

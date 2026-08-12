@@ -1,6 +1,7 @@
 {
   "name": "@ooxml-dev/cli",
   "version": "0.1.0",
+  "description": "Query the ooxml.dev reference from a terminal or agent skill.",
   "private": true,
   "type": "module",
   "bin": {
