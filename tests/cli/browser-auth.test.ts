@@ -49,3 +49,13 @@ test("prints a manual sign-in URL before waiting for the browser callback", asyn
 	expect(message).toContain("If it does not open, visit:");
 	expect(message).toContain("https://api.ooxml.dev/authorize");
 });
+
+test("handles concurrent callbacks without throwing", async () => {
+	const callback = await startOAuthCallback(0, (state) => state === "expected", 1_000);
+	const url = `http://127.0.0.1:${callback.port}/callback?code=ok&state=expected`;
+	const responses = await Promise.all(
+		Array.from({ length: 20 }, () => fetch(url).catch(() => undefined)),
+	);
+	expect(responses.some((response) => response?.status === 200)).toBe(true);
+	await callback.result;
+});

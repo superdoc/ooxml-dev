@@ -46,6 +46,10 @@ export async function startOAuthCallback(
 	result.catch(() => {});
 
 	const server = createServer((request, response) => {
+		if (settled) {
+			response.writeHead(409).end("Sign-in callback already handled");
+			return;
+		}
 		const address = server.address() as AddressInfo;
 		const expectedHost = `127.0.0.1:${address.port}`;
 		if (request.headers.host !== expectedHost) {
