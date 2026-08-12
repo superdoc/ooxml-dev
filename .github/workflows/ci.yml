@@ -15,13 +15,10 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
 
-      - run: bun install
+      - run: bunx --package vite-plus@0.2.9 vp install --frozen-lockfile
 
-      - name: Lint
-        run: bun run lint
-
-      - name: Type check
-        run: bun run typecheck
+      - name: Check
+        run: bun run check
 
       - name: Migration runner tests
         run: bun test tests/scripts/db-migrate.test.ts

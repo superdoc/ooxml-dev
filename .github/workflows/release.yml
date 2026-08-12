@@ -32,7 +32,7 @@ jobs:
         with:
           node-version: 24
 
-      - run: bun install
+      - run: bunx --package vite-plus@0.2.9 vp install --frozen-lockfile
 
       - name: Create version pull request or release packages
         uses: changesets/action@22ccf9aa43179fe9e27dc62e575971d28cce197c # v2.0.0

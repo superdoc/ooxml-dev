@@ -98,13 +98,13 @@ export function SpecSearchDialog({ open, onOpenChange }: Props) {
 	}, [open]);
 
 	// Reset selection when search changes
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally reset when search changes
+	// oxlint-disable-next-line react/exhaustive-deps -- Reset only when the search changes.
 	useEffect(() => {
 		setSelectedIndex(0);
 	}, [search]);
 
 	// Scroll selected item into view
-	// biome-ignore lint/correctness/useExhaustiveDependencies: intentionally scroll when selectedIndex changes
+	// oxlint-disable-next-line react/exhaustive-deps -- Scroll only when the selection changes.
 	useEffect(() => {
 		if (resultsRef.current) {
 			const selected = resultsRef.current.querySelector("[data-selected='true']");

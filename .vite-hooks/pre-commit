@@ -1,0 +1,7 @@
+if [ ! -x node_modules/.bin/vp ]; then
+	exit 0
+fi
+
+vp staged
+bun run typecheck
+bun run build

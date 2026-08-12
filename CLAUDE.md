@@ -50,11 +50,12 @@ dev/
 ## Commands
 
 ```bash
-bun install            # Install dependencies
-bun dev                # Web app at http://localhost:5173
-bun dev:mcp            # MCP server at http://localhost:8787
-bun run build          # Production build (web)
-bun run typecheck      # Type-check all packages
+bunx --package vite-plus@0.2.9 vp install --frozen-lockfile  # Install dependencies
+bun dev                                                   # Web app at http://localhost:5173
+bun dev:mcp                                               # MCP server at http://localhost:8787
+bun run check                                             # Format, lint, and type-check
+bun run build                                             # Production build (web)
+bun run typecheck                                         # Type-check all packages
 ```
 
 ## Adding a Doc Page

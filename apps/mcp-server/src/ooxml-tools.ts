@@ -202,7 +202,7 @@ export function isOoxmlTool(name: string): name is OoxmlToolName {
 	return OOXML_TOOL_NAMES.has(name);
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: neon's tagged template is loosely typed.
+// oxlint-disable-next-line typescript/no-explicit-any -- Neon exposes a loosely typed tagged template.
 type Sql = any;
 
 /**

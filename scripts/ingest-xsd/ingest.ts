@@ -33,7 +33,7 @@ import { resolveQNameAttr } from "./qname.ts";
 import type { Declaration, ParsedSchemaSet, PreserveOrderNode } from "./types.ts";
 import { vocabularyForNamespace } from "./vocabulary.ts";
 
-// biome-ignore lint/suspicious/noExplicitAny: postgres library typing is intricate; helpers stay generic.
+// oxlint-disable-next-line typescript/no-explicit-any -- Postgres exposes a loosely typed tagged template.
 type Sql = any;
 
 export interface IngestSchemaSetOptions {
