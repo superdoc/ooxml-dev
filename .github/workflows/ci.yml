@@ -29,5 +29,11 @@ jobs:
       - name: MCP tests
         run: bun run mcp:test
 
+      - name: CLI tests
+        run: bun run cli:test
+
+      - name: CLI build
+        run: bun run --cwd apps/cli build
+
       - name: Build
         run: bun run build

@@ -1,0 +1,29 @@
+{
+  "name": "@ooxml-dev/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "ooxml": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "vp pack --clean",
+    "dev": "bun src/cli.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "open": "11.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.10",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
