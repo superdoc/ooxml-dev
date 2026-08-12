@@ -26,6 +26,7 @@
     "db:migrate": "bun scripts/db-migrate.ts",
     "mcp:users": "bun --env-file=.env apps/mcp-server/scripts/users.ts",
     "mcp:preset-shapes:generate": "bun scripts/generate-preset-shape-guides.ts",
+    "mcp:test": "bun test tests/scripts/source-artifact.test.ts tests/mcp-server/tools-list.test.ts tests/mcp-server/opc-parts.test.ts tests/mcp-server/mcp-auth.test.ts tests/mcp-server/oauth-authorization.test.ts tests/mcp-server/preset-shape-guides.test.ts",
     "sources:sync": "bun scripts/sources-sync.ts",
     "pdf:ingest": "bun scripts/ingest-pdf/pipeline.ts",
     "pdf:chunk": "bun scripts/ingest-pdf/chunk.ts",

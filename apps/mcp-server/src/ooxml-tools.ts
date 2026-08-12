@@ -215,6 +215,7 @@ export async function callOoxmlTool(
 	args: Record<string, unknown>,
 	env: OoxmlEnv,
 ): Promise<string> {
+	if (name === "ooxml_preset_shape") return runOoxmlTool(name, args, null);
 	const sql = neon(env.DATABASE_URL);
 	return runOoxmlTool(name, args, sql);
 }

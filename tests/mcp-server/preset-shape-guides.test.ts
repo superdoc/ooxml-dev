@@ -13,13 +13,13 @@ test("returns the two guide names required by round2SameRect", async () => {
 	expect(output).toContain("Fourth Edition");
 });
 
-test("distinguishes shapes without guides from invalid shape names", async () => {
+test("distinguishes shapes without guides from names missing in Annex D", async () => {
 	const noGuides = await runOoxmlTool("ooxml_preset_shape", { shape: "rect" }, sqlStub);
-	const invalid = await runOoxmlTool("ooxml_preset_shape", { shape: "notARealShape" }, sqlStub);
+	const missing = await runOoxmlTool("ooxml_preset_shape", { shape: "notARealShape" }, sqlStub);
 
 	expect(noGuides).toContain("has no adjust guides");
-	expect(invalid).toContain("Preset shape not found");
-	expect(invalid).not.toContain("has no adjust guides");
+	expect(missing).toContain("Preset shape not found in Annex D");
+	expect(missing).not.toContain("has no adjust guides");
 });
 
 test("does not accept preset text-warp names as preset shapes", async () => {

@@ -6,11 +6,8 @@
  * ZIP files. Pass --source to regenerate from an already extracted XML file.
  */
 
-import { createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
 import { XMLParser } from "fast-xml-parser";
+import { readPinnedNestedZipEntry, sha256 } from "./lib/source-artifact";
 
 const SOURCE_NAME = "ecma-376-annex-d-drawingml-geometries";
 const OUTPUT_PATH = "apps/mcp-server/src/preset-shape-guides.generated.ts";
@@ -18,16 +15,6 @@ const PART_1_ZIP =
 	"ECMA-376, Fourth Edition, Part 1 - Fundamentals And Markup Language Reference.zip";
 const GEOMETRIES_ZIP = "OfficeOpenXML-DrawingMLGeometries.zip";
 const SHAPES_XML = "presetShapeDefinitions.xml";
-
-interface SourceEntry {
-	name: string;
-	url: string;
-	sha256: string;
-}
-
-interface SourceManifest {
-	sources: SourceEntry[];
-}
 
 type PreserveOrderNode = Record<string, unknown>;
 
@@ -60,6 +47,8 @@ export function extractPresetShapeGuides(xml: string): PresetShapeGuides[] {
 
 		const existing = shapes.get(name);
 		if (existing) {
+			// The published fourth-edition XML repeats upDownArrow. Keep an
+			// identical duplicate, but fail if repeated definitions disagree.
 			if (existing.join("\0") !== guides.join("\0")) {
 				throw new Error(`Conflicting Annex D definitions for ${name}`);
 			}
@@ -70,50 +59,6 @@ export function extractPresetShapeGuides(xml: string): PresetShapeGuides[] {
 
 	if (shapes.size === 0) throw new Error("No preset shapes found in Annex D");
 	return [...shapes].map(([name, guides]) => ({ name, guides }));
-}
-
-function sha256(data: ArrayBuffer | Uint8Array | string): string {
-	return createHash("sha256").update(data).digest("hex");
-}
-
-async function extractZipEntry(
-	zipPath: string,
-	entry: string,
-	destination: string,
-): Promise<string> {
-	const process = Bun.spawn(["unzip", "-j", "-o", "-q", zipPath, entry, "-d", destination], {
-		stdout: "inherit",
-		stderr: "pipe",
-	});
-	const [error, code] = await Promise.all([new Response(process.stderr).text(), process.exited]);
-	if (code !== 0) throw new Error(`Could not extract ${entry}: ${error.trim()}`);
-	return join(destination, basename(entry));
-}
-
-async function downloadAnnexXml(): Promise<Uint8Array> {
-	const manifest = (await Bun.file("data/sources.json").json()) as SourceManifest;
-	const source = manifest.sources.find((entry) => entry.name === SOURCE_NAME);
-	if (!source) throw new Error(`Missing ${SOURCE_NAME} in data/sources.json`);
-
-	const response = await fetch(source.url);
-	if (!response.ok) throw new Error(`Could not download Annex D: ${response.status}`);
-	const outerZip = new Uint8Array(await response.arrayBuffer());
-	const actualHash = sha256(outerZip);
-	if (actualHash !== source.sha256) {
-		throw new Error(`Annex D source hash mismatch: expected ${source.sha256}, got ${actualHash}`);
-	}
-
-	const tempDirectory = await mkdtemp(join(tmpdir(), "ooxml-annex-d-"));
-	try {
-		const outerPath = join(tempDirectory, "edition4.zip");
-		await Bun.write(outerPath, outerZip);
-		const part1Path = await extractZipEntry(outerPath, PART_1_ZIP, tempDirectory);
-		const geometriesPath = await extractZipEntry(part1Path, GEOMETRIES_ZIP, tempDirectory);
-		const shapesPath = await extractZipEntry(geometriesPath, SHAPES_XML, tempDirectory);
-		return new Uint8Array(await Bun.file(shapesPath).arrayBuffer());
-	} finally {
-		await rm(tempDirectory, { recursive: true, force: true });
-	}
 }
 
 function renderLookup(shapes: PresetShapeGuides[], sourceHash: string): string {
@@ -148,7 +93,7 @@ async function main() {
 
 	const xmlBytes = source
 		? new Uint8Array(await Bun.file(source).arrayBuffer())
-		: await downloadAnnexXml();
+		: await readPinnedNestedZipEntry(SOURCE_NAME, [PART_1_ZIP, GEOMETRIES_ZIP, SHAPES_XML]);
 	const xml = new TextDecoder().decode(xmlBytes);
 	const shapes = extractPresetShapeGuides(xml);
 	await Bun.write(OUTPUT_PATH, renderLookup(shapes, sha256(xmlBytes)));

@@ -29,5 +29,8 @@ jobs:
       - name: PDF ingest tests
         run: bun run pdf:test
 
+      - name: MCP tests
+        run: bun run mcp:test
+
       - name: Build
         run: bun run build

@@ -7,6 +7,7 @@ import {
 	type McpAuthorizationProps,
 	type UsageEvent,
 } from "../../apps/mcp-server/src/mcp-auth.ts";
+import { executeMcpTool } from "../../apps/mcp-server/src/mcp.ts";
 
 const USER_ID = "user_test_mcp";
 const CLIENT_ID = "dynamic_client_test";
@@ -133,6 +134,31 @@ test("authenticated tools/list exposes only the public OOXML tools", async () =>
 
 	expect(response.status).toBe(200);
 	expect(names).toEqual(EXPECTED_TOOL_NAMES);
+});
+
+test("authenticated MCP returns preset-shape guides from Annex D", async () => {
+	const events: UsageEvent[] = [];
+	const handler = createAuthenticatedMcpHandler({
+		usageRecorder: { record: (event) => events.push(event) },
+		toolExecutor: (name, args) =>
+			executeMcpTool(name, args, { DATABASE_URL: "", VOYAGE_API_KEY: "" } as never),
+		now: () => new Date("2026-08-12T18:00:00.000Z"),
+	});
+
+	const response = await handler(
+		modernRequest("tools/call", {
+			name: "ooxml_preset_shape",
+			arguments: { shape: "round2SameRect" },
+		}),
+		identity,
+	);
+	const body = (await response.json()) as {
+		result?: { content?: Array<{ text?: string }> };
+	};
+
+	expect(response.status).toBe(200);
+	expect(body.result?.content?.[0]?.text).toContain("`adj1`, `adj2`");
+	expect(events[0]?.tool).toBe("ooxml_preset_shape");
 });
 
 test("usage recording failures do not discard a successful tool result", async () => {
