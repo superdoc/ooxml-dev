@@ -16,6 +16,20 @@
 
 import { $ } from "bun";
 
+async function verifyPdf(partNumber: number, pdfPath: string) {
+	const manifest = await Bun.file("./data/sources.json").json();
+	const source = manifest.sources?.find(
+		(entry: { name?: string }) => entry.name === `ecma-376-part${partNumber}`,
+	);
+	if (!source?.sha256) throw new Error(`Missing source hash for Part ${partNumber}`);
+
+	const bytes = await Bun.file(pdfPath).arrayBuffer();
+	const actual = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+	if (actual !== source.sha256) {
+		throw new Error(`Part ${partNumber} PDF does not match data/sources.json`);
+	}
+}
+
 async function main() {
 	const args = process.argv.slice(2);
 
@@ -49,6 +63,8 @@ async function main() {
 		console.error("Missing VOYAGE_API_KEY environment variable");
 		process.exit(1);
 	}
+
+	await verifyPdf(partNumber, pdfPath);
 
 	// Create directories
 	const extractedDir = `./data/extracted/part${partNumber}`;
