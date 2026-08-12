@@ -21,6 +21,14 @@ export interface AppliedMigration {
 	checksum: string;
 }
 
+export function assertMigrationTrackingInitialized(initialized: boolean): void {
+	if (!initialized) {
+		throw new Error(
+			"Database migration tracking is not initialized. Initialize a new database with db/schema.sql, or baseline an existing database before deploying.",
+		);
+	}
+}
+
 export function migrationChecksum(content: string): string {
 	return new Bun.CryptoHasher("sha256").update(content).digest("hex");
 }
@@ -74,13 +82,10 @@ export async function migrate(databaseUrl: string, directory = "./db/migrations"
 		return await db.sql.begin(async (sql) => {
 			// Serialize production deploys before reading or changing migration state.
 			await sql`SELECT pg_advisory_xact_lock(hashtext('ooxml.dev:db-migrate'))`;
-			await sql`
-				CREATE TABLE IF NOT EXISTS schema_migrations (
-					name TEXT PRIMARY KEY,
-					checksum TEXT NOT NULL,
-					applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-				)
+			const [tracking] = await sql<{ initialized: boolean }[]>`
+				SELECT to_regclass('public.schema_migrations') IS NOT NULL AS initialized
 			`;
+			assertMigrationTrackingInitialized(tracking?.initialized ?? false);
 
 			const applied = await sql<AppliedMigration[]>`
 				SELECT name, checksum

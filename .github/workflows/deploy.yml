@@ -12,6 +12,12 @@ on:
       - "packages/shared/**"
       - "scripts/db-migrate.ts"
 
+# Keep migration and deployment as one ordered production operation. Without
+# this, overlapping main pushes can publish an older commit after a newer one.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
 jobs:
   migrate-db:
     runs-on: ubuntu-latest

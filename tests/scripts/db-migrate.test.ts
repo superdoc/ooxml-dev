@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
 	type AppliedMigration,
 	type Migration,
+	assertMigrationTrackingInitialized,
 	migrationChecksum,
 	pendingMigrations,
 } from "../../scripts/db-migrate.ts";
@@ -42,9 +43,29 @@ describe("tracked database migrations", () => {
 		);
 	});
 
+	test("rejects an untracked database instead of replaying old migrations", () => {
+		expect(() => assertMigrationTrackingInitialized(false)).toThrow(
+			"Database migration tracking is not initialized",
+		);
+		expect(() => assertMigrationTrackingInitialized(true)).not.toThrow();
+	});
+
 	test("uses stable SHA-256 checksums", () => {
 		expect(migrationChecksum("same contents")).toBe(migrationChecksum("same contents"));
 		expect(migrationChecksum("same contents")).not.toBe(migrationChecksum("changed contents"));
 		expect(migrationChecksum("same contents")).toHaveLength(64);
+	});
+
+	test("fresh database schema baselines every migration at its current checksum", async () => {
+		const schema = await Bun.file("db/schema.sql").text();
+		const repositoryMigrations = await import("../../scripts/db-migrate.ts").then(({ readMigrations }) =>
+			readMigrations(),
+		);
+
+		for (const repositoryMigration of repositoryMigrations) {
+			expect(schema).toContain(
+				`('${repositoryMigration.name}', '${repositoryMigration.checksum}')`,
+			);
+		}
 	});
 });

@@ -12,6 +12,17 @@ CREATE TABLE schema_migrations (
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Fresh databases start from this complete schema snapshot, so baseline every
+-- migration already represented below instead of replaying incremental SQL.
+INSERT INTO schema_migrations (name, checksum) VALUES
+  ('0001_reference_sources.sql', '0ed712ebe34600c79265b59c04a633804cb4308d6c42566f149ca0b6e1c98588'),
+  ('0002_xsd_schema.sql', '7790fccea3551e114900fbfd64797be0c3ee4162709f6e1f98a61a3b934aa166'),
+  ('0003_xsd_metadata.sql', 'c1282d874ba6195985dee3f266c82c73f162ecfbdb449ac4a67dba0ada27332d'),
+  ('0004_local_element_scoping.sql', '0c6a4ab76012fb9781d870ce0f295e8ee957be11d1afa15515820481a42da5f5'),
+  ('0005_drop_legacy_ecma376.sql', 'd9b0f11126ab68f4398d8f2ddc7e02fef2ee427fa64df7ce8e21ff2976d8c1a6'),
+  ('0006_mcp_usage_events.sql', 'fab8b907b350bd3f01e6907652c6cd1890cefb57497c96012b1213b265434432'),
+  ('0007_schema_migrations.sql', '481a3c865e051abe2795cf9fb0dd654c00300c374d68d0193512ee167ab093f0');
+
 -- Reference sources: provenance for every chunk and (later) every schema symbol.
 -- Source artifacts (PDFs, XSDs) are NOT committed. Manifest at data/sources.json
 -- is the human-edited source of truth; scripts/sync-sources.ts upserts rows from it.
