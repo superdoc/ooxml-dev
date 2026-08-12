@@ -1,7 +1,7 @@
 <img width="300" alt="logo" src="https://github.com/user-attachments/assets/df6311a6-c050-4592-bbf1-4a2228655bc3" />
 
-[![Web](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=web-v*&label=Web&color=blue)](https://ooxml.dev)
-[![MCP Server](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=mcp-v*&label=MCP%20Server&color=blue)](https://api.ooxml.dev/mcp)
+[![Web](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=%40ooxml-dev%2Fweb%40*&label=Web&color=blue)](https://ooxml.dev)
+[![MCP Server](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=%40ooxml-dev%2Fmcp-server%40*&label=MCP%20Server&color=blue)](https://api.ooxml.dev/mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The OOXML spec, explained by people who actually implemented it.
