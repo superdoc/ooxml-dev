@@ -64,31 +64,31 @@ async function main() {
 		console.log("Connecting to database...");
 		const db = createDbClient(databaseUrl);
 
-		// Upload in batches
-		console.log("Uploading...");
-		const batchSize = 50;
-		let uploaded = 0;
+		const [source] = await db.sql<{ id: number }[]>`
+			SELECT id FROM reference_sources WHERE name = ${`ecma-376-part${partNumber}`}
+		`;
+		if (!source) throw new Error(`Missing reference source for Part ${partNumber}`);
 
-		for (let i = 0; i < chunks.length; i += batchSize) {
-			const batch = chunks.slice(i, i + batchSize);
+		const items: Omit<SpecContent, "id">[] = chunks.map((chunk) => ({
+			partNumber,
+			sectionId: chunk.sectionId,
+			title: chunk.sectionTitle,
+			content: chunk.content,
+			contentType: chunk.contentType,
+			pageNumber: chunk.pageNumber,
+			embedding: chunk.embedding,
+			sourceId: source.id,
+		}));
 
-			const items: Omit<SpecContent, "id">[] = batch.map((chunk) => ({
-				partNumber,
-				sectionId: chunk.sectionId,
-				title: chunk.sectionTitle,
-				content: chunk.content,
-				contentType: chunk.contentType,
-				pageNumber: chunk.pageNumber,
-				embedding: chunk.embedding,
-			}));
-
-			await db.insertBatch(items);
-			uploaded += batch.length;
-
-			if (uploaded % 200 === 0 || uploaded === chunks.length) {
-				console.log(`  ${uploaded}/${chunks.length}`);
-			}
-		}
+		console.log("Replacing existing part...");
+		const result = await db.replacePart(partNumber, items, {
+			onProgress: (inserted) => {
+				if (inserted % 200 === 0 || inserted === items.length) {
+					console.log(`  ${inserted}/${items.length}`);
+				}
+			},
+		});
+		console.log(`Replaced ${result.deleted} rows with ${result.inserted}`);
 
 		// Get stats
 		const stats = await db.getStats();

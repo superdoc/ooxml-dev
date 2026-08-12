@@ -7,17 +7,13 @@
  *   bun scripts/ingest-pdf/embed.ts <chunks-file> <output-file>
  *
  * Environment variables:
- *   EMBEDDING_PROVIDER - openai, google, voyage, or cohere (default: openai)
- *   OPENAI_API_KEY / GOOGLE_API_KEY / etc.
+ *   VOYAGE_API_KEY
  *
  * Example:
- *   EMBEDDING_PROVIDER=openai bun scripts/ingest-pdf/embed.ts ./chunks/part1-chunks.json ./embedded/part1-embedded.json
+ *   bun scripts/ingest-pdf/embed.ts ./chunks/part1-chunks.json ./embedded/part1-embedded.json
  */
 
-import {
-	createEmbeddingClient,
-	type EmbeddingProvider,
-} from "../../packages/shared/src/embeddings/index.ts";
+import { createEmbeddingClient } from "../../packages/shared/src/embeddings/index.ts";
 
 interface Chunk {
 	sectionId: string;
@@ -33,26 +29,19 @@ interface EmbeddedChunk extends Chunk {
 	embedding: number[];
 }
 
-function getApiKey(provider: EmbeddingProvider): string {
-	const keyMap: Record<EmbeddingProvider, string> = {
-		openai: "OPENAI_API_KEY",
-		google: "GOOGLE_API_KEY",
-		voyage: "VOYAGE_API_KEY",
-		cohere: "COHERE_API_KEY",
-	};
-
-	const key = process.env[keyMap[provider]];
+function getApiKey(): string {
+	const key = process.env.VOYAGE_API_KEY;
 	if (!key) {
-		throw new Error(`Missing ${keyMap[provider]} environment variable`);
+		throw new Error("Missing VOYAGE_API_KEY environment variable");
 	}
 	return key;
 }
 
-async function embedChunks(chunks: Chunk[], provider: EmbeddingProvider): Promise<EmbeddedChunk[]> {
-	const apiKey = getApiKey(provider);
-	const client = createEmbeddingClient(provider, { apiKey });
+async function embedChunks(chunks: Chunk[]): Promise<EmbeddedChunk[]> {
+	const apiKey = getApiKey();
+	const client = createEmbeddingClient("voyage", { apiKey });
 
-	console.log(`Using ${provider} (${client.model}, ${client.dimensions}d)`);
+	console.log(`Using Voyage (${client.model}, ${client.dimensions}d)`);
 	console.log(`Embedding ${chunks.length} chunks...`);
 
 	const embeddedChunks: EmbeddedChunk[] = [];
@@ -96,19 +85,14 @@ async function main() {
 		console.log("Usage: bun scripts/ingest-pdf/embed.ts <chunks-file> <output-file>");
 		console.log("");
 		console.log("Environment variables:");
-		console.log("  EMBEDDING_PROVIDER - openai, google, voyage, or cohere (default: openai)");
-		console.log("  OPENAI_API_KEY / GOOGLE_API_KEY / etc.");
+		console.log("  VOYAGE_API_KEY");
 		console.log("");
 		console.log("Example:");
-		console.log(
-			"  EMBEDDING_PROVIDER=openai bun scripts/ingest-pdf/embed.ts ./chunks/part1.json ./embedded/part1.json",
-		);
+		console.log("  bun scripts/ingest-pdf/embed.ts ./chunks/part1.json ./embedded/part1.json");
 		process.exit(1);
 	}
 
 	const [chunksFile, outputFile] = args;
-	const provider = (process.env.EMBEDDING_PROVIDER || "openai") as EmbeddingProvider;
-
 	try {
 		// Load chunks
 		const chunksJson = await Bun.file(chunksFile).text();
@@ -117,7 +101,7 @@ async function main() {
 
 		// Generate embeddings
 		const startTime = Date.now();
-		const embeddedChunks = await embedChunks(chunks, provider);
+		const embeddedChunks = await embedChunks(chunks);
 		const duration = (Date.now() - startTime) / 1000;
 
 		// Save embedded chunks

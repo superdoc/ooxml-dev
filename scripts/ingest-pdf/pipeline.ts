@@ -8,8 +8,7 @@
  *
  * Environment variables:
  *   DATABASE_URL - PostgreSQL connection string
- *   EMBEDDING_PROVIDER - openai, google, voyage, or cohere (default: openai)
- *   OPENAI_API_KEY / GOOGLE_API_KEY / etc.
+ *   VOYAGE_API_KEY
  *
  * Example:
  *   bun scripts/ingest-pdf/pipeline.ts 1 ./pdfs/ECMA-376-Part1.pdf
@@ -25,8 +24,7 @@ async function main() {
 		console.log("");
 		console.log("Environment variables:");
 		console.log("  DATABASE_URL - PostgreSQL connection string");
-		console.log("  EMBEDDING_PROVIDER - openai, google, voyage, or cohere (default: openai)");
-		console.log("  OPENAI_API_KEY / GOOGLE_API_KEY / etc.");
+		console.log("  VOYAGE_API_KEY");
 		console.log("");
 		console.log("Example:");
 		console.log("  bun scripts/ingest-pdf/pipeline.ts 1 ./pdfs/ECMA-376-Part1.pdf");
@@ -47,16 +45,8 @@ async function main() {
 		process.exit(1);
 	}
 
-	const provider = process.env.EMBEDDING_PROVIDER || "openai";
-	const apiKeyVar = {
-		openai: "OPENAI_API_KEY",
-		google: "GOOGLE_API_KEY",
-		voyage: "VOYAGE_API_KEY",
-		cohere: "COHERE_API_KEY",
-	}[provider];
-
-	if (apiKeyVar && !process.env[apiKeyVar]) {
-		console.error(`Missing ${apiKeyVar} environment variable`);
+	if (!process.env.VOYAGE_API_KEY) {
+		console.error("Missing VOYAGE_API_KEY environment variable");
 		process.exit(1);
 	}
 
@@ -71,11 +61,11 @@ async function main() {
 	console.log(`ECMA-376 Part ${partNumber} Ingestion Pipeline`);
 	console.log("=".repeat(60));
 	console.log(`PDF: ${pdfPath}`);
-	console.log(`Embedding provider: ${provider}`);
+	console.log("Embedding provider: Voyage");
 	console.log("");
 
 	// Step 1: Extract (using Python + pymupdf4llm for better markdown output)
-	console.log("\n[1/4] Extracting PDF...");
+	console.log("\n[1/5] Extracting PDF...");
 	console.log("-".repeat(40));
 
 	// Try different Python paths (pymupdf4llm may be installed in a specific version)
@@ -108,17 +98,22 @@ async function main() {
 	}
 
 	// Step 2: Chunk
-	console.log("\n[2/4] Chunking content...");
+	console.log("\n[2/5] Chunking content...");
 	console.log("-".repeat(40));
 	await $`bun scripts/ingest-pdf/chunk.ts ${extractedDir} ${chunksFile}`;
 
-	// Step 3: Embed
-	console.log("\n[3/4] Generating embeddings...");
+	// Step 3: Audit generated content before spending embedding credits.
+	console.log("\n[3/5] Auditing corpus...");
+	console.log("-".repeat(40));
+	await $`bun scripts/ingest-pdf/audit.ts ${extractedDir}`;
+
+	// Step 4: Embed
+	console.log("\n[4/5] Generating embeddings...");
 	console.log("-".repeat(40));
 	await $`bun scripts/ingest-pdf/embed.ts ${chunksFile} ${embeddedFile}`;
 
-	// Step 4: Upload
-	console.log("\n[4/4] Uploading to database...");
+	// Step 5: Upload
+	console.log("\n[5/5] Uploading to database...");
 	console.log("-".repeat(40));
 	await $`bun scripts/ingest-pdf/upload.ts ${partNumber} ${embeddedFile}`;
 

@@ -3,6 +3,19 @@ import type { SearchResult, SpecContent } from "../types";
 
 export type DbClient = ReturnType<typeof createDbClient>;
 
+function specContentRow(item: Omit<SpecContent, "id">) {
+	return {
+		part_number: item.partNumber,
+		section_id: item.sectionId,
+		title: item.title,
+		content: item.content,
+		content_type: item.contentType,
+		page_number: item.pageNumber,
+		embedding: item.embedding ? `[${item.embedding.join(",")}]` : null,
+		source_id: item.sourceId ?? null,
+	};
+}
+
 export function createDbClient(connectionString: string) {
 	const sql = postgres(connectionString);
 
@@ -16,7 +29,7 @@ export function createDbClient(connectionString: string) {
 		// Insert content
 		async insert(content: Omit<SpecContent, "id">) {
 			const [result] = await sql<[{ id: number }]>`
-				INSERT INTO spec_content (part_number, section_id, title, content, content_type, page_number, embedding)
+				INSERT INTO spec_content (part_number, section_id, title, content, content_type, page_number, embedding, source_id)
 				VALUES (
 					${content.partNumber},
 					${content.sectionId},
@@ -24,7 +37,8 @@ export function createDbClient(connectionString: string) {
 					${content.content},
 					${content.contentType},
 					${content.pageNumber},
-					${content.embedding ? `[${content.embedding.join(",")}]` : null}
+					${content.embedding ? `[${content.embedding.join(",")}]` : null},
+					${content.sourceId ?? null}
 				)
 				RETURNING id
 			`;
@@ -33,21 +47,45 @@ export function createDbClient(connectionString: string) {
 
 		// Insert multiple (batch)
 		async insertBatch(items: Omit<SpecContent, "id">[]) {
-			const values = items.map((item) => ({
-				part_number: item.partNumber,
-				section_id: item.sectionId,
-				title: item.title,
-				content: item.content,
-				content_type: item.contentType,
-				page_number: item.pageNumber,
-				embedding: item.embedding ? `[${item.embedding.join(",")}]` : null,
-			}));
+			const values = items.map(specContentRow);
 
 			const result = await sql`
 				INSERT INTO spec_content ${sql(values)}
 				RETURNING id
 			`;
 			return result.map((r) => r.id as number);
+		},
+
+		async replacePart(
+			partNumber: number,
+			items: Omit<SpecContent, "id">[],
+			options: { batchSize?: number; onProgress?: (inserted: number) => void } = {},
+		): Promise<{ deleted: number; inserted: number }> {
+			if (items.length === 0) {
+				throw new Error(`Refusing to replace Part ${partNumber} with no content`);
+			}
+			if (items.some((item) => item.partNumber !== partNumber)) {
+				throw new Error(`Replacement content must all belong to Part ${partNumber}`);
+			}
+
+			const { batchSize = 50, onProgress } = options;
+			return sql.begin(async (tx) => {
+				// postgres.js transaction handles are callable at runtime, but its
+				// TransactionSql type drops the call signature through Omit.
+				const transaction = tx as unknown as typeof sql;
+				const deleted =
+					await transaction`DELETE FROM spec_content WHERE part_number = ${partNumber}`;
+				let inserted = 0;
+
+				for (let index = 0; index < items.length; index += batchSize) {
+					const batch = items.slice(index, index + batchSize).map(specContentRow);
+					await transaction`INSERT INTO spec_content ${transaction(batch)}`;
+					inserted += batch.length;
+					onProgress?.(inserted);
+				}
+
+				return { deleted: deleted.count, inserted };
+			});
 		},
 
 		// Update embedding

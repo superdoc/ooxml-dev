@@ -26,5 +26,8 @@ jobs:
       - name: Migration runner tests
         run: bun test tests/scripts/db-migrate.test.ts
 
+      - name: PDF ingest tests
+        run: bun run pdf:test
+
       - name: Build
         run: bun run build

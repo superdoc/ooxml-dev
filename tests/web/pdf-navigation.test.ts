@@ -6,11 +6,13 @@ import {
 } from "../../apps/web/src/components/pdfNavigation";
 
 describe("printedPageToSheet", () => {
-	test("uses the printed page counts of the served PDFs", () => {
-		expect(PDF_CONFIG[1].totalPages).toBe(5016);
-		expect(PDF_CONFIG[2].totalPages).toBe(129);
-		expect(PDF_CONFIG[3].totalPages).toBe(38);
-		expect(PDF_CONFIG[4].totalPages).toBe(1534);
+	test("printed pages plus front matter equal the served PDF sheet counts", () => {
+		const servedPdfSheets = { 1: 5026, 2: 137, 3: 44, 4: 1548 };
+
+		for (const [part, sheets] of Object.entries(servedPdfSheets)) {
+			const config = PDF_CONFIG[Number(part)];
+			expect(config.totalPages + config.pageOffset).toBe(sheets);
+		}
 	});
 
 	test("adds each PDF's front-matter offset", () => {
@@ -25,8 +27,8 @@ describe("printedPageToSheet", () => {
 	});
 
 	test("builds the browser URL with the physical sheet", () => {
-		expect(pdfUrlForPrintedPage(238, PDF_CONFIG[1])).toBe(
-			"https://cdn.ooxml.dev/ecma-376/part1.pdf#page=248&toolbar=0&navpanes=0",
+		expect(pdfUrlForPrintedPage(219, PDF_CONFIG[1])).toBe(
+			"https://cdn.ooxml.dev/ecma-376/part1.pdf#page=229&toolbar=0&navpanes=0",
 		);
 	});
 });
