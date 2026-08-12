@@ -5,12 +5,39 @@ on:
   push:
     branches: [main]
     paths:
+      - ".github/workflows/deploy.yml"
       - "apps/web/**"
       - "apps/mcp-server/**"
+      - "db/migrations/**"
       - "packages/shared/**"
+      - "scripts/db-migrate.ts"
+
+# Keep migration and deployment as one ordered production operation. Without
+# this, overlapping main pushes can publish an older commit after a newer one.
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
 
 jobs:
+  migrate-db:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install
+
+      - name: Apply database migrations
+        run: bun run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+
   deploy-web:
+    needs: migrate-db
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -37,6 +64,7 @@ jobs:
           command: pages deploy apps/web/dist --project-name=ooxml-dev
 
   deploy-mcp:
+    needs: migrate-db
     runs-on: ubuntu-latest
     permissions:
       contents: read

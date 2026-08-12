@@ -4,7 +4,9 @@ Each phase that changes the schema adds one numbered SQL file here. Files are ap
 
 ## Conventions
 
-- **Idempotent**: every statement uses `IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, or equivalent. Re-running a migration is a no-op.
+- **Tracked**: `schema_migrations` records each applied filename and SHA-256 checksum.
+- **Immutable**: never edit an applied file. The runner rejects checksum drift; add a new migration instead.
+- **Explicitly baselined**: fresh databases use the complete `db/schema.sql` snapshot. Before promoting one to a long-lived environment, verify its schema and record the migrations already represented by that snapshot.
 - **Forward-only**: no `down` scripts. Reverting means writing a new migration.
 - **Source of truth split**:
   - `db/schema.sql` reflects the full schema after all migrations are applied. Used by `docker-compose` to initialize fresh dev databases via `db:reset`.
@@ -12,13 +14,17 @@ Each phase that changes the schema adds one numbered SQL file here. Files are ap
 
 ## Applying migrations
 
-For now, apply manually against an existing database:
+Apply every pending migration against an existing database:
 
 ```bash
-psql "$DATABASE_URL" -f db/migrations/0001_reference_sources.sql
+bun run db:migrate
 ```
 
-A small runner script can be added later if/when phases need it.
+The runner holds a PostgreSQL advisory lock, applies pending files in one transaction, and records their checksums atomically. Production deploys run it before either the web app or MCP Worker is published, so a migration failure stops the release.
+
+The runner refuses to replay migration history when `schema_migrations` is missing or empty. Before using it with a fresh database or one created before migration tracking, verify that database's schema and explicitly baseline its existing migrations. This prevents an automated deploy from guessing that old migrations are safe to replay.
+
+Production requires `DATABASE_URL` as a GitHub Actions repository secret in addition to the Worker secret of the same name.
 
 ## Adding a new migration
 
