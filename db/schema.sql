@@ -4,6 +4,14 @@
 
 CREATE EXTENSION IF NOT EXISTS vector;
 
+-- Deployment ledger for incremental migrations. Checksums make applied files
+-- immutable so production history cannot drift from the repository.
+CREATE TABLE schema_migrations (
+  name TEXT PRIMARY KEY,
+  checksum TEXT NOT NULL,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- Reference sources: provenance for every chunk and (later) every schema symbol.
 -- Source artifacts (PDFs, XSDs) are NOT committed. Manifest at data/sources.json
 -- is the human-edited source of truth; scripts/sync-sources.ts upserts rows from it.

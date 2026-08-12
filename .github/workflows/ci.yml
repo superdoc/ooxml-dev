@@ -23,5 +23,8 @@ jobs:
       - name: Type check
         run: bun run typecheck
 
+      - name: Migration runner tests
+        run: bun test tests/scripts/db-migrate.test.ts
+
       - name: Build
         run: bun run build
