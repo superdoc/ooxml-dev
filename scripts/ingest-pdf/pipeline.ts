@@ -8,14 +8,27 @@
  *
  * Environment variables:
  *   DATABASE_URL - PostgreSQL connection string
- *   EMBEDDING_PROVIDER - openai, google, voyage, or cohere (default: openai)
- *   OPENAI_API_KEY / GOOGLE_API_KEY / etc.
+ *   VOYAGE_API_KEY
  *
  * Example:
  *   bun scripts/ingest-pdf/pipeline.ts 1 ./pdfs/ECMA-376-Part1.pdf
  */
 
 import { $ } from "bun";
+
+async function verifyPdf(partNumber: number, pdfPath: string) {
+	const manifest = await Bun.file("./data/sources.json").json();
+	const source = manifest.sources?.find(
+		(entry: { name?: string }) => entry.name === `ecma-376-part${partNumber}`,
+	);
+	if (!source?.sha256) throw new Error(`Missing source hash for Part ${partNumber}`);
+
+	const bytes = await Bun.file(pdfPath).arrayBuffer();
+	const actual = new Bun.CryptoHasher("sha256").update(bytes).digest("hex");
+	if (actual !== source.sha256) {
+		throw new Error(`Part ${partNumber} PDF does not match data/sources.json`);
+	}
+}
 
 async function main() {
 	const args = process.argv.slice(2);
@@ -25,8 +38,7 @@ async function main() {
 		console.log("");
 		console.log("Environment variables:");
 		console.log("  DATABASE_URL - PostgreSQL connection string");
-		console.log("  EMBEDDING_PROVIDER - openai, google, voyage, or cohere (default: openai)");
-		console.log("  OPENAI_API_KEY / GOOGLE_API_KEY / etc.");
+		console.log("  VOYAGE_API_KEY");
 		console.log("");
 		console.log("Example:");
 		console.log("  bun scripts/ingest-pdf/pipeline.ts 1 ./pdfs/ECMA-376-Part1.pdf");
@@ -47,18 +59,12 @@ async function main() {
 		process.exit(1);
 	}
 
-	const provider = process.env.EMBEDDING_PROVIDER || "openai";
-	const apiKeyVar = {
-		openai: "OPENAI_API_KEY",
-		google: "GOOGLE_API_KEY",
-		voyage: "VOYAGE_API_KEY",
-		cohere: "COHERE_API_KEY",
-	}[provider];
-
-	if (apiKeyVar && !process.env[apiKeyVar]) {
-		console.error(`Missing ${apiKeyVar} environment variable`);
+	if (!process.env.VOYAGE_API_KEY) {
+		console.error("Missing VOYAGE_API_KEY environment variable");
 		process.exit(1);
 	}
+
+	await verifyPdf(partNumber, pdfPath);
 
 	// Create directories
 	const extractedDir = `./data/extracted/part${partNumber}`;
@@ -71,7 +77,7 @@ async function main() {
 	console.log(`ECMA-376 Part ${partNumber} Ingestion Pipeline`);
 	console.log("=".repeat(60));
 	console.log(`PDF: ${pdfPath}`);
-	console.log(`Embedding provider: ${provider}`);
+	console.log("Embedding provider: Voyage");
 	console.log("");
 
 	// Step 1: Extract (using Python + pymupdf4llm for better markdown output)
@@ -120,6 +126,7 @@ async function main() {
 	// Step 4: Upload
 	console.log("\n[4/4] Uploading to database...");
 	console.log("-".repeat(40));
+	await $`bun scripts/sources-sync.ts`;
 	await $`bun scripts/ingest-pdf/upload.ts ${partNumber} ${embeddedFile}`;
 
 	console.log(`\n${"=".repeat(60)}`);

@@ -4,6 +4,16 @@
  * Takes extracted PDF content and creates chunks for embedding.
  * Respects section boundaries and handles XML examples specially.
  *
+ * Page numbers: extract.py leaves `<!--page:N-->` markers in each section's
+ * body, where N is the physical page the following text came from. We track
+ * those markers while walking the content so a chunk records the page it
+ * actually falls on, not the page its section started on. Markers are stripped
+ * from the stored content and from the embedding text.
+ *
+ * `pageNumber` is the *printed* page (physical minus the part's front-matter
+ * offset, read from the extraction metadata) - the number printed on the page
+ * and stored in `spec_content.page_number`.
+ *
  * Usage:
  *   bun scripts/ingest-pdf/chunk.ts <extracted-dir> <output-file>
  *
@@ -33,7 +43,9 @@ interface Chunk {
 
 // Chunking configuration
 const CHUNK_SIZE = 6000; // ~2000-3000 tokens
-const CHUNK_OVERLAP = 200;
+
+// Page markers written by extract.py (physical page number).
+const PAGE_MARKER_PATTERN = /<!--page:(\d+)-->/g;
 
 // Markdown code fence pattern (pymupdf4llm outputs code in fences)
 const CODE_FENCE_PATTERN = /```[\s\S]*?```/g;
@@ -64,11 +76,29 @@ function stripForEmbedding(content: string): string {
 	return text.replace(/\n{3,}/g, "\n\n").trim();
 }
 
-function splitIntoChunks(
+/**
+ * Pull page markers out of a paragraph.
+ *
+ * Returns the paragraph without markers, plus the last physical page seen in
+ * it (null when the paragraph carried no marker).
+ */
+function takePageMarkers(paragraph: string): { text: string; physicalPage: number | null } {
+	let physicalPage: number | null = null;
+
+	const text = paragraph.replace(PAGE_MARKER_PATTERN, (_match, page: string) => {
+		physicalPage = Number.parseInt(page, 10);
+		return "";
+	});
+
+	return { text: text.trim(), physicalPage };
+}
+
+export function splitIntoChunks(
 	text: string,
 	sectionId: string,
 	sectionTitle: string,
 	pageStart: number,
+	pageOffset: number,
 ): Chunk[] {
 	const chunks: Chunk[] = [];
 
@@ -76,61 +106,78 @@ function splitIntoChunks(
 		return chunks;
 	}
 
-	// Split full content (with code blocks and tables inline) by paragraphs
+	// Physical page -> printed page. Sections start on a printed page already,
+	// so fall back to that until the first marker is seen.
+	const toPrinted = (physical: number) => Math.max(1, physical - pageOffset);
+
 	const paragraphs = text.split(/\n\n+/);
 	let currentChunk = "";
-	const currentPage = pageStart;
+	let currentPage = pageStart;
+	let chunkPage = pageStart;
 
-	for (const para of paragraphs) {
-		const trimmedPara = para.trim();
-		if (!trimmedPara) continue;
-
-		// Check if adding this paragraph exceeds chunk size
-		if (currentChunk.length + trimmedPara.length > CHUNK_SIZE) {
-			// Save current chunk if it has content
-			if (currentChunk.trim()) {
-				const content = currentChunk.trim();
-				chunks.push({
-					sectionId,
-					sectionTitle,
-					content,
-					embeddingText: stripForEmbedding(content),
-					contentType: "text",
-					pageNumber: currentPage,
-					chunkIndex: chunks.length,
-				});
-			}
-
-			// Start new chunk with overlap
-			const overlap = currentChunk.slice(-CHUNK_OVERLAP);
-			currentChunk = `${overlap}\n\n${trimmedPara}`;
-		} else {
-			currentChunk += (currentChunk ? "\n\n" : "") + trimmedPara;
-		}
-	}
-
-	// Don't forget the last chunk
-	if (currentChunk.trim()) {
+	const pushChunk = () => {
 		const content = currentChunk.trim();
+		if (!content) return;
+
 		chunks.push({
 			sectionId,
 			sectionTitle,
 			content,
-			embeddingText: stripForEmbedding(content),
+			embeddingText: stripForEmbedding(content) || content,
 			contentType: "text",
-			pageNumber: currentPage,
+			pageNumber: chunkPage,
 			chunkIndex: chunks.length,
 		});
+	};
+
+	for (const para of paragraphs) {
+		const { text: trimmedPara, physicalPage } = takePageMarkers(para);
+
+		if (physicalPage !== null) {
+			currentPage = toPrinted(physicalPage);
+			// A marker that arrives while the chunk is still empty belongs to
+			// the chunk about to be started.
+			if (!currentChunk.trim()) {
+				chunkPage = currentPage;
+			}
+		}
+
+		if (!trimmedPara) continue;
+
+		// Check if adding this paragraph exceeds chunk size
+		if (currentChunk.length + trimmedPara.length > CHUNK_SIZE) {
+			pushChunk();
+
+			currentChunk = trimmedPara;
+			chunkPage = currentPage;
+		} else {
+			if (!currentChunk) {
+				chunkPage = currentPage;
+			}
+			currentChunk += (currentChunk ? "\n\n" : "") + trimmedPara;
+		}
 	}
+
+	pushChunk();
 
 	return chunks;
 }
 
-async function chunkSections(sectionsPath: string): Promise<Chunk[]> {
-	const sectionsJson = await Bun.file(sectionsPath).text();
-	const sections: ExtractedSection[] = JSON.parse(sectionsJson);
+async function readPageOffset(extractedDir: string): Promise<number> {
+	const metadata = await Bun.file(`${extractedDir}/metadata.json`).json();
+	const offset = metadata?.pageOffset;
+	if (!Number.isInteger(offset) || offset < 1) {
+		throw new Error("metadata.json has no valid pageOffset; run extract.py again");
+	}
+	return offset;
+}
 
-	console.log(`Processing ${sections.length} sections...`);
+async function chunkSections(extractedDir: string): Promise<Chunk[]> {
+	const sectionsJson = await Bun.file(`${extractedDir}/sections.json`).text();
+	const sections: ExtractedSection[] = JSON.parse(sectionsJson);
+	const pageOffset = await readPageOffset(extractedDir);
+
+	console.log(`Processing ${sections.length} sections (page offset ${pageOffset})...`);
 
 	const allChunks: Chunk[] = [];
 
@@ -140,6 +187,7 @@ async function chunkSections(sectionsPath: string): Promise<Chunk[]> {
 			section.sectionId,
 			section.title,
 			section.pageStart,
+			pageOffset,
 		);
 		allChunks.push(...chunks);
 	}
@@ -159,10 +207,9 @@ async function main() {
 	}
 
 	const [extractedDir, outputFile] = args;
-	const sectionsPath = `${extractedDir}/sections.json`;
 
 	try {
-		const chunks = await chunkSections(sectionsPath);
+		const chunks = await chunkSections(extractedDir);
 
 		// Save chunks
 		await Bun.write(outputFile, JSON.stringify(chunks, null, 2));
@@ -175,7 +222,6 @@ async function main() {
 		const avgEmbedding = Math.round(
 			chunks.reduce((sum, c) => sum + c.embeddingText.length, 0) / chunks.length,
 		);
-
 		console.log("\nChunk statistics:");
 		console.log(`  Total chunks: ${chunks.length}`);
 		console.log(`  Average content size: ${avgContent} chars`);
@@ -186,4 +232,6 @@ async function main() {
 	}
 }
 
-main();
+if (import.meta.main) {
+	main();
+}

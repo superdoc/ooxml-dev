@@ -3,6 +3,21 @@ import type { SearchResult, SpecContent } from "../types";
 
 export type DbClient = ReturnType<typeof createDbClient>;
 
+type ReplacementContent = Omit<SpecContent, "id"> & { sourceId: number };
+
+function specContentRow(item: ReplacementContent) {
+	return {
+		part_number: item.partNumber,
+		section_id: item.sectionId,
+		title: item.title,
+		content: item.content,
+		content_type: item.contentType,
+		page_number: item.pageNumber,
+		embedding: item.embedding ? `[${item.embedding.join(",")}]` : null,
+		source_id: item.sourceId,
+	};
+}
+
 export function createDbClient(connectionString: string) {
 	const sql = postgres(connectionString);
 
@@ -48,6 +63,34 @@ export function createDbClient(connectionString: string) {
 				RETURNING id
 			`;
 			return result.map((r) => r.id as number);
+		},
+
+		async replacePart(
+			partNumber: number,
+			items: ReplacementContent[],
+		): Promise<{ deleted: number; inserted: number }> {
+			if (items.length === 0) {
+				throw new Error(`Refusing to replace Part ${partNumber} with no content`);
+			}
+			if (items.some((item) => item.partNumber !== partNumber)) {
+				throw new Error(`Replacement content must all belong to Part ${partNumber}`);
+			}
+
+			return sql.begin(async (tx) => {
+				// postgres.js transaction handles are callable at runtime, but its
+				// TransactionSql type drops the call signature through Omit.
+				const transaction = tx as unknown as typeof sql;
+				await transaction`SELECT pg_advisory_xact_lock(376, ${partNumber})`;
+				const deleted =
+					await transaction`DELETE FROM spec_content WHERE part_number = ${partNumber}`;
+				const batchSize = 50;
+				for (let index = 0; index < items.length; index += batchSize) {
+					const batch = items.slice(index, index + batchSize).map(specContentRow);
+					await transaction`INSERT INTO spec_content ${transaction(batch)}`;
+				}
+
+				return { deleted: deleted.count, inserted: items.length };
+			});
 		},
 
 		// Update embedding

@@ -1,28 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-
-// PDF URLs and page counts for each part
-const PDF_CONFIG: Record<number, { url: string; totalPages: number; name: string }> = {
-	1: {
-		url: "https://cdn.ooxml.dev/ecma-376/part1.pdf",
-		totalPages: 5560,
-		name: "Fundamentals",
-	},
-	2: {
-		url: "https://cdn.ooxml.dev/ecma-376/part2.pdf",
-		totalPages: 129,
-		name: "OPC",
-	},
-	3: {
-		url: "https://cdn.ooxml.dev/ecma-376/part3.pdf",
-		totalPages: 65,
-		name: "Compatibility",
-	},
-	4: {
-		url: "https://cdn.ooxml.dev/ecma-376/part4.pdf",
-		totalPages: 4031,
-		name: "Transitional",
-	},
-};
+import { PDF_CONFIG, pdfUrlForPrintedPage } from "./pdfNavigation";
 
 interface PdfViewerProps {
 	partNumber: number;
@@ -119,7 +96,7 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 	}, [config.totalPages, onPageChange]);
 
 	const progressPercent = (currentPage / config.totalPages) * 100;
-	const pdfUrl = `${config.url}#page=${currentPage}&toolbar=0&navpanes=0`;
+	const pdfUrl = pdfUrlForPrintedPage(currentPage, config);
 
 	return (
 		<div className="flex h-full flex-col bg-[var(--color-bg-secondary)]">
