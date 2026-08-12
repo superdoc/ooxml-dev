@@ -104,7 +104,7 @@ export function parseArguments(args: string[]): OoxmlCommand {
 		attributes: "ooxml_attributes",
 		enum: "ooxml_enum",
 	};
-	if (qnameTools[command]) {
+	if (Object.hasOwn(qnameTools, command)) {
 		const parsed = singleValue(rest, `ooxml ${command} <qname> [--profile <profile>]`, [
 			"--profile",
 		]);

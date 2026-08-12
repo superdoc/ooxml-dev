@@ -7,7 +7,7 @@ import type {
 	StoredOAuthClientInformation,
 	StoredOAuthTokens,
 } from "@modelcontextprotocol/client";
-import { CredentialStore, type StoredCredentials } from "./credentials.js";
+import { type CredentialSession, type StoredCredentials } from "./credentials.js";
 
 export class CliOAuthProvider implements OAuthClientProvider {
 	pendingAuthorizationUrl?: URL;
@@ -18,7 +18,7 @@ export class CliOAuthProvider implements OAuthClientProvider {
 
 	constructor(
 		readonly redirectUrl: string,
-		private readonly store: CredentialStore,
+		private readonly store: CredentialSession,
 	) {
 		this.clientMetadata = {
 			client_name: "OOXML CLI",

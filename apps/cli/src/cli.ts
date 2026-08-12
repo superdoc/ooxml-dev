@@ -2,11 +2,11 @@
 
 import type { ContentBlock } from "@modelcontextprotocol/client";
 import { parseArguments } from "./arguments.js";
-import { callbackPort, CLI_VERSION, mcpUrl } from "./constants.js";
+import { callbackPort, CLI_VERSION } from "./constants.js";
 import { CredentialStore } from "./credentials.js";
 import { connectToMcp } from "./mcp-client.js";
 
-const HELP = `OOXML reference tools for people and agents.
+const HELP = `Search and inspect the OOXML reference.
 
 Usage:
   ooxml login
@@ -33,7 +33,6 @@ async function withClient<T>(
 	const connection = await connectToMcp({
 		allowBrowser,
 		callbackPort: callbackPort(),
-		serverUrl: mcpUrl(),
 	});
 	try {
 		return await callback(connection.client);
@@ -60,8 +59,13 @@ async function main(): Promise<void> {
 		return;
 	}
 	if (command.name === "logout") {
-		await new CredentialStore().clear();
-		console.log("Signed out on this device.");
+		const credentials = await new CredentialStore().open();
+		try {
+			await credentials.clear();
+			console.log("Signed out on this device.");
+		} finally {
+			await credentials.close();
+		}
 		return;
 	}
 	if (command.name === "login") {

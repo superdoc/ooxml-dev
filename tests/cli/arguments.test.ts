@@ -47,3 +47,9 @@ test("does not expose raw MCP tool calls", () => {
 	expect(() => parseArguments(["call", "ooxml_element"])).toThrow("Unknown command: call");
 	expect(() => parseArguments(["tools"])).toThrow("Unknown command: tools");
 });
+
+test("rejects command names inherited from Object", () => {
+	for (const command of ["toString", "constructor", "__proto__"]) {
+		expect(() => parseArguments([command, "w:p"])).toThrow(`Unknown command: ${command}`);
+	}
+});

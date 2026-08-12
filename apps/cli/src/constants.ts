@@ -1,11 +1,7 @@
 export const CLI_NAME = "ooxml";
 export const CLI_VERSION = "0.1.0";
-export const DEFAULT_MCP_URL = "https://api.ooxml.dev/mcp";
+export const MCP_URL = "https://api.ooxml.dev/mcp";
 export const DEFAULT_CALLBACK_PORT = 53_682;
-
-export function mcpUrl(): URL {
-	return new URL(process.env.OOXML_MCP_URL ?? DEFAULT_MCP_URL);
-}
 
 export function callbackPort(): number {
 	const rawPort = process.env.OOXML_CALLBACK_PORT;

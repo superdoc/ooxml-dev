@@ -7,7 +7,7 @@ import { CredentialStore } from "../../apps/cli/src/credentials";
 test("round-trips credentials and removes them on logout", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "ooxml-cli-credentials-"));
 	const path = join(directory, "credentials.json");
-	const store = new CredentialStore(path);
+	const store = await new CredentialStore(path).open();
 
 	await store.write({ tokens: { access_token: "secret", token_type: "bearer" } });
 	expect(await store.read()).toEqual({
@@ -18,4 +18,23 @@ test("round-trips credentials and removes them on logout", async () => {
 
 	await store.clear();
 	expect(await store.read()).toEqual({});
+	await store.close();
+});
+
+test("allows only one credential session at a time", async () => {
+	const directory = await mkdtemp(join(tmpdir(), "ooxml-cli-credentials-"));
+	const path = join(directory, "credentials.json");
+	const first = await new CredentialStore(path).open();
+	let secondOpened = false;
+	const secondPromise = new CredentialStore(path).open().then((session) => {
+		secondOpened = true;
+		return session;
+	});
+
+	await Bun.sleep(100);
+	expect(secondOpened).toBe(false);
+	await first.close();
+	const second = await secondPromise;
+	expect(secondOpened).toBe(true);
+	await second.close();
 });
