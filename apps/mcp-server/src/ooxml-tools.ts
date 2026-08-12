@@ -3,7 +3,8 @@
  *
  * Tools:
  *   ooxml_element, ooxml_type, ooxml_children,
- *   ooxml_attributes, ooxml_enum, ooxml_namespace.
+ *   ooxml_attributes, ooxml_enum, ooxml_namespace,
+ *   ooxml_package_part, ooxml_preset_shape.
  *
  * Default profile is `transitional`. Future profiles (e.g. word-compatible-docx)
  * will compose Transitional with Office extension schemas.
@@ -40,6 +41,7 @@ import {
 	type OpcPart,
 	searchParts,
 } from "./opc-parts";
+import { lookupPresetShapeGuides } from "./preset-shape-guides.generated";
 
 export const DEFAULT_PROFILE = "transitional";
 
@@ -166,6 +168,22 @@ export const OOXML_TOOL_DEFS: ToolDef[] = [
 			},
 		},
 	},
+	{
+		name: "ooxml_preset_shape",
+		description:
+			"Return the ordered adjust-guide names for a DrawingML preset shape used in `<a:prstGeom>`. " +
+			"The data is extracted from ECMA-376 Fourth Edition, Part 1 Annex D. Pass the exact preset shape name, such as `round2SameRect`.",
+		inputSchema: {
+			type: "object" as const,
+			properties: {
+				shape: {
+					type: "string",
+					description: 'Exact preset shape name from `<a:prstGeom prst="...">`.',
+				},
+			},
+			required: ["shape"],
+		},
+	},
 ];
 
 export type OoxmlToolName =
@@ -175,7 +193,8 @@ export type OoxmlToolName =
 	| "ooxml_attributes"
 	| "ooxml_enum"
 	| "ooxml_namespace"
-	| "ooxml_package_part";
+	| "ooxml_package_part"
+	| "ooxml_preset_shape";
 
 const OOXML_TOOL_NAMES: ReadonlySet<string> = new Set(OOXML_TOOL_DEFS.map((t) => t.name));
 
@@ -196,6 +215,7 @@ export async function callOoxmlTool(
 	args: Record<string, unknown>,
 	env: OoxmlEnv,
 ): Promise<string> {
+	if (name === "ooxml_preset_shape") return runOoxmlTool(name, args, null);
 	const sql = neon(env.DATABASE_URL);
 	return runOoxmlTool(name, args, sql);
 }
@@ -421,6 +441,15 @@ export async function runOoxmlTool(
 				title: query ? `Package parts matching '${query}'` : "Curated OPC package parts",
 				query,
 			});
+		}
+
+		case "ooxml_preset_shape": {
+			const shape = typeof args.shape === "string" ? args.shape.trim() : "";
+			if (!shape) return formatPresetShapeNotFound(shape);
+
+			const guides = lookupPresetShapeGuides(shape);
+			if (guides === null) return formatPresetShapeNotFound(shape);
+			return formatPresetShapeGuides(shape, guides);
 		}
 
 		default: {
@@ -720,6 +749,26 @@ function formatPackagePartNotFound(
 		"- `ooxml_search` if the part type is documented in spec prose but not yet curated here",
 	);
 	return lines.join("\n");
+}
+
+function formatPresetShapeGuides(shape: string, guides: readonly string[]): string {
+	const lines = [`## Preset shape: ${shape}`, ""];
+	if (guides.length === 0) {
+		lines.push("This shape has no adjust guides.");
+	} else {
+		lines.push(`Adjust guides, in order: ${guides.map((guide) => `\`${guide}\``).join(", ")}.`);
+	}
+	lines.push("");
+	lines.push("Source: ECMA-376 Fourth Edition, Part 1 Annex D (`presetShapeDefinitions.xml`).");
+	return lines.join("\n");
+}
+
+function formatPresetShapeNotFound(shape: string): string {
+	return [
+		`## Preset shape not found in Annex D${shape ? `: ${shape}` : ""}`,
+		"",
+		'Check the exact name from `<a:prstGeom prst="...">`.',
+	].join("\n");
 }
 
 // --- Local element resolution ------------------------------------------

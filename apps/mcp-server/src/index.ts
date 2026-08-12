@@ -1,12 +1,14 @@
 /**
  * OOXML Reference MCP Server
  *
- * Cloudflare Worker exposing three tool families over MCP:
+ * Cloudflare Worker exposing four tool families over MCP:
  *   - prose search     over ECMA-376 PDFs (ooxml_search, ooxml_section, ooxml_parts)
  *   - schema lookup    over the parsed XSD graph (ooxml_element, ooxml_type,
  *                      ooxml_children, ooxml_attributes, ooxml_enum, ooxml_namespace)
  *   - package metadata curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x
  *                      (ooxml_package_part)
+ *   - preset shapes    adjust-guide names from Part 1 Annex D
+ *                      (ooxml_preset_shape)
  */
 
 import { type OAuthHelpers, OAuthProvider } from "@cloudflare/workers-oauth-provider";

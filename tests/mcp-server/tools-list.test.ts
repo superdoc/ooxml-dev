@@ -23,6 +23,8 @@ const EXPECTED_TOOL_NAMES = [
 	"ooxml_namespace",
 	// OPC package metadata (over the curated opc-parts dataset)
 	"ooxml_package_part",
+	// DrawingML preset shape guide names (from Part 1 Annex D)
+	"ooxml_preset_shape",
 ] as const;
 
 interface JsonRpcResponse {
