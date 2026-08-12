@@ -21,10 +21,13 @@ export interface AppliedMigration {
 	checksum: string;
 }
 
-export function assertMigrationTrackingInitialized(initialized: boolean): void {
-	if (!initialized) {
+export function assertMigrationTrackingInitialized(
+	initialized: boolean,
+	appliedMigrationCount: number,
+): void {
+	if (!initialized || appliedMigrationCount === 0) {
 		throw new Error(
-			"Database migration tracking is not initialized. Initialize a new database with db/schema.sql, or baseline an existing database before deploying.",
+			"Database migration tracking is not initialized. Verify the database schema and explicitly baseline its existing migrations before deploying.",
 		);
 	}
 }
@@ -83,15 +86,18 @@ export async function migrate(databaseUrl: string, directory = "./db/migrations"
 			// Serialize production deploys before reading or changing migration state.
 			await sql`SELECT pg_advisory_xact_lock(hashtext('ooxml.dev:db-migrate'))`;
 			const [tracking] = await sql<{ initialized: boolean }[]>`
-				SELECT to_regclass('public.schema_migrations') IS NOT NULL AS initialized
+				SELECT to_regclass('schema_migrations') IS NOT NULL AS initialized
 			`;
-			assertMigrationTrackingInitialized(tracking?.initialized ?? false);
+			if (!tracking?.initialized) {
+				assertMigrationTrackingInitialized(false, 0);
+			}
 
 			const applied = await sql<AppliedMigration[]>`
 				SELECT name, checksum
 				FROM schema_migrations
 				ORDER BY name
 			`;
+			assertMigrationTrackingInitialized(true, applied.length);
 			const pending = pendingMigrations(migrations, applied);
 
 			for (const migration of pending) {
