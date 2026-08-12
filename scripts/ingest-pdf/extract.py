@@ -64,7 +64,7 @@ def detect_page_offset(doc) -> int:
             votes[(index + 1) - printed] += 1
 
     if not votes:
-        return 0
+        raise ValueError("Could not detect the PDF page offset")
 
     offset, agreed = votes.most_common(1)[0]
     total = sum(votes.values())
@@ -234,11 +234,10 @@ ANNEX_QUALIFIER_ONLY_RE = re.compile(r"\([^)]*\)")
 HEADING_PREFIX_RE = re.compile(r"^#{1,6}\s*")
 EMPHASIS_RE = re.compile(r"\*+|__")
 
-# A table-of-contents entry: leader dots and/or a trailing page number.
+# A table-of-contents entry contains leader dots before its page number.
 # These render bold in some pymupdf4llm versions and so are indistinguishable
 # from real headings by styling alone - they must be rejected by shape.
 TOC_LEADER_RE = re.compile(r"\.{2,}")
-TOC_TRAILING_PAGE_RE = re.compile(r"[.\s]\d{1,4}\s*$")
 
 
 def strip_emphasis(text: str) -> str:
@@ -258,12 +257,7 @@ def has_heading_markup(stripped: str) -> bool:
 
 def looks_like_toc(title: str, raw_line: str) -> bool:
     """True when a heading candidate is really a contents-listing entry."""
-    if TOC_LEADER_RE.search(raw_line):
-        return True
-
-    # No leader dots, but still "Title 1047" - a contents entry whose title
-    # ran long enough to swallow the dots.
-    return bool(TOC_TRAILING_PAGE_RE.search(title))
+    return bool(TOC_LEADER_RE.search(raw_line))
 
 
 def match_heading(stripped: str) -> tuple[str, str] | None:

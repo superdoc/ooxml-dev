@@ -3,7 +3,9 @@ import type { SearchResult, SpecContent } from "../types";
 
 export type DbClient = ReturnType<typeof createDbClient>;
 
-function specContentRow(item: Omit<SpecContent, "id">) {
+type ReplacementContent = Omit<SpecContent, "id"> & { sourceId: number };
+
+function specContentRow(item: ReplacementContent) {
 	return {
 		part_number: item.partNumber,
 		section_id: item.sectionId,
@@ -12,7 +14,7 @@ function specContentRow(item: Omit<SpecContent, "id">) {
 		content_type: item.contentType,
 		page_number: item.pageNumber,
 		embedding: item.embedding ? `[${item.embedding.join(",")}]` : null,
-		source_id: item.sourceId ?? null,
+		source_id: item.sourceId,
 	};
 }
 
@@ -29,7 +31,7 @@ export function createDbClient(connectionString: string) {
 		// Insert content
 		async insert(content: Omit<SpecContent, "id">) {
 			const [result] = await sql<[{ id: number }]>`
-				INSERT INTO spec_content (part_number, section_id, title, content, content_type, page_number, embedding, source_id)
+				INSERT INTO spec_content (part_number, section_id, title, content, content_type, page_number, embedding)
 				VALUES (
 					${content.partNumber},
 					${content.sectionId},
@@ -37,8 +39,7 @@ export function createDbClient(connectionString: string) {
 					${content.content},
 					${content.contentType},
 					${content.pageNumber},
-					${content.embedding ? `[${content.embedding.join(",")}]` : null},
-					${content.sourceId ?? null}
+					${content.embedding ? `[${content.embedding.join(",")}]` : null}
 				)
 				RETURNING id
 			`;
@@ -47,7 +48,15 @@ export function createDbClient(connectionString: string) {
 
 		// Insert multiple (batch)
 		async insertBatch(items: Omit<SpecContent, "id">[]) {
-			const values = items.map(specContentRow);
+			const values = items.map((item) => ({
+				part_number: item.partNumber,
+				section_id: item.sectionId,
+				title: item.title,
+				content: item.content,
+				content_type: item.contentType,
+				page_number: item.pageNumber,
+				embedding: item.embedding ? `[${item.embedding.join(",")}]` : null,
+			}));
 
 			const result = await sql`
 				INSERT INTO spec_content ${sql(values)}
@@ -58,8 +67,7 @@ export function createDbClient(connectionString: string) {
 
 		async replacePart(
 			partNumber: number,
-			items: Omit<SpecContent, "id">[],
-			options: { batchSize?: number; onProgress?: (inserted: number) => void } = {},
+			items: ReplacementContent[],
 		): Promise<{ deleted: number; inserted: number }> {
 			if (items.length === 0) {
 				throw new Error(`Refusing to replace Part ${partNumber} with no content`);
@@ -68,23 +76,20 @@ export function createDbClient(connectionString: string) {
 				throw new Error(`Replacement content must all belong to Part ${partNumber}`);
 			}
 
-			const { batchSize = 50, onProgress } = options;
 			return sql.begin(async (tx) => {
 				// postgres.js transaction handles are callable at runtime, but its
 				// TransactionSql type drops the call signature through Omit.
 				const transaction = tx as unknown as typeof sql;
+				await transaction`SELECT pg_advisory_xact_lock(376, ${partNumber})`;
 				const deleted =
 					await transaction`DELETE FROM spec_content WHERE part_number = ${partNumber}`;
-				let inserted = 0;
-
+				const batchSize = 50;
 				for (let index = 0; index < items.length; index += batchSize) {
 					const batch = items.slice(index, index + batchSize).map(specContentRow);
 					await transaction`INSERT INTO spec_content ${transaction(batch)}`;
-					inserted += batch.length;
-					onProgress?.(inserted);
 				}
 
-				return { deleted: deleted.count, inserted };
+				return { deleted: deleted.count, inserted: items.length };
 			});
 		},
 

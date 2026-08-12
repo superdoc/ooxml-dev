@@ -53,9 +53,10 @@ class TestNumberedHeadings(unittest.TestCase):
     def test_ignores_contents_listing(self):
         self.assertIsNone(match_heading("17.3.2 Paragraphs .......... 264"))
         self.assertIsNone(match_heading("**17.3.2** **Paragraphs .......... 264**"))
-        # A contents entry whose title swallowed the leader dots
-        self.assertIsNone(match_heading("**17.3.2** **Paragraphs 264**"))
         self.assertIsNone(match_heading("| **17.3.2** | Paragraphs | 264 |"))
+
+    def test_keeps_real_heading_ending_in_a_number(self):
+        self.assertEqual(match_heading("**12.3** **Changes in Part 1**"), ("12.3", "Changes in Part 1"))
 
     def test_ignores_running_header(self):
         # The header on every body page: the title isn't part of the bold run

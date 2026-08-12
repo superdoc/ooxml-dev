@@ -28,11 +28,10 @@
     "sources:sync": "bun scripts/sources-sync.ts",
     "pdf:ingest": "bun scripts/ingest-pdf/pipeline.ts",
     "pdf:chunk": "bun scripts/ingest-pdf/chunk.ts",
-    "pdf:audit": "bun scripts/ingest-pdf/audit.ts",
     "pdf:embed": "bun scripts/ingest-pdf/embed.ts",
     "pdf:upload": "bun scripts/ingest-pdf/upload.ts",
     "pdf:setup": "pip install -r scripts/requirements.txt",
-    "pdf:test": "python3 -m unittest discover -s tests/ingest-pdf && bun test tests/ingest-pdf/*.test.ts",
+    "pdf:test": "python3 -m unittest discover -s tests/ingest-pdf && bun test tests/ingest-pdf/chunk-pages.test.ts",
     "xsd:fetch": "bun scripts/ingest-xsd/fetch.ts",
     "xsd:ingest": "bun scripts/ingest-xsd/ingest.ts",
     "test": "export TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/ecma_spec} && bun test tests/web/ && bun test tests/db/ && bun test tests/ingest-xsd/ && bun test tests/mcp-server/"

@@ -1,12 +1,14 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from "bun:test";
 import { createDbClient, type DbClient } from "../../packages/shared/src/db";
 import type { SpecContent } from "../../packages/shared/src/types";
+import { getTestDatabaseUrl } from "../test-db";
 
-const databaseUrl = process.env.TEST_DATABASE_URL;
-const describeWithDatabase = databaseUrl ? describe : describe.skip;
+const databaseUrl = getTestDatabaseUrl();
 const part = 901;
+const sourceName = "test-spec-content-replace";
+let sourceId: number;
 
-function chunk(content: string): Omit<SpecContent, "id"> {
+function chunk(content: string): Omit<SpecContent, "id"> & { sourceId: number } {
 	return {
 		partNumber: part,
 		sectionId: "17.3.1.12",
@@ -14,14 +16,22 @@ function chunk(content: string): Omit<SpecContent, "id"> {
 		content,
 		contentType: "text",
 		pageNumber: 219,
+		sourceId,
 	};
 }
 
-describeWithDatabase("replacePart", () => {
+describe("replacePart", () => {
 	let db: DbClient;
 
-	beforeAll(() => {
-		db = createDbClient(databaseUrl as string);
+	beforeAll(async () => {
+		db = createDbClient(databaseUrl);
+		const [source] = await db.sql<{ id: number }[]>`
+			INSERT INTO reference_sources (name, kind)
+			VALUES (${sourceName}, 'test')
+			ON CONFLICT (name) DO UPDATE SET kind = EXCLUDED.kind
+			RETURNING id
+		`;
+		sourceId = source.id;
 	});
 
 	beforeEach(async () => {
@@ -30,6 +40,7 @@ describeWithDatabase("replacePart", () => {
 
 	afterAll(async () => {
 		await db.sql`DELETE FROM spec_content WHERE part_number = ${part}`;
+		await db.sql`DELETE FROM reference_sources WHERE id = ${sourceId}`;
 		await db.close();
 	});
 

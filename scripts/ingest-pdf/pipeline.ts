@@ -65,7 +65,7 @@ async function main() {
 	console.log("");
 
 	// Step 1: Extract (using Python + pymupdf4llm for better markdown output)
-	console.log("\n[1/5] Extracting PDF...");
+	console.log("\n[1/4] Extracting PDF...");
 	console.log("-".repeat(40));
 
 	// Try different Python paths (pymupdf4llm may be installed in a specific version)
@@ -98,23 +98,19 @@ async function main() {
 	}
 
 	// Step 2: Chunk
-	console.log("\n[2/5] Chunking content...");
+	console.log("\n[2/4] Chunking content...");
 	console.log("-".repeat(40));
 	await $`bun scripts/ingest-pdf/chunk.ts ${extractedDir} ${chunksFile}`;
 
-	// Step 3: Audit generated content before spending embedding credits.
-	console.log("\n[3/5] Auditing corpus...");
-	console.log("-".repeat(40));
-	await $`bun scripts/ingest-pdf/audit.ts ${extractedDir}`;
-
-	// Step 4: Embed
-	console.log("\n[4/5] Generating embeddings...");
+	// Step 3: Embed
+	console.log("\n[3/4] Generating embeddings...");
 	console.log("-".repeat(40));
 	await $`bun scripts/ingest-pdf/embed.ts ${chunksFile} ${embeddedFile}`;
 
-	// Step 5: Upload
-	console.log("\n[5/5] Uploading to database...");
+	// Step 4: Upload
+	console.log("\n[4/4] Uploading to database...");
 	console.log("-".repeat(40));
+	await $`bun scripts/sources-sync.ts`;
 	await $`bun scripts/ingest-pdf/upload.ts ${partNumber} ${embeddedFile}`;
 
 	console.log(`\n${"=".repeat(60)}`);

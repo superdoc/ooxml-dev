@@ -21,7 +21,7 @@
  *   bun scripts/ingest-pdf/chunk.ts ./extracted/part1 ./chunks/part1-chunks.json
  */
 
-export interface ExtractedSection {
+interface ExtractedSection {
 	sectionId: string;
 	title: string;
 	pageStart: number;
@@ -31,7 +31,7 @@ export interface ExtractedSection {
 	parentId: string | null;
 }
 
-export interface Chunk {
+interface Chunk {
 	sectionId: string;
 	sectionTitle: string;
 	content: string;
@@ -43,7 +43,6 @@ export interface Chunk {
 
 // Chunking configuration
 const CHUNK_SIZE = 6000; // ~2000-3000 tokens
-const CHUNK_OVERLAP = 200;
 
 // Page markers written by extract.py (physical page number).
 const PAGE_MARKER_PATTERN = /<!--page:(\d+)-->/g;
@@ -149,9 +148,7 @@ export function splitIntoChunks(
 		if (currentChunk.length + trimmedPara.length > CHUNK_SIZE) {
 			pushChunk();
 
-			// Start new chunk with overlap, on whichever page we have reached
-			const overlap = currentChunk.slice(-CHUNK_OVERLAP);
-			currentChunk = `${overlap}\n\n${trimmedPara}`;
+			currentChunk = trimmedPara;
 			chunkPage = currentPage;
 		} else {
 			if (!currentChunk) {
@@ -167,22 +164,15 @@ export function splitIntoChunks(
 }
 
 async function readPageOffset(extractedDir: string): Promise<number> {
-	try {
-		const metadata = await Bun.file(`${extractedDir}/metadata.json`).json();
-		const offset = metadata?.pageOffset;
-		if (typeof offset === "number") return offset;
-	} catch {
-		// Extraction predating page offsets - fall through.
+	const metadata = await Bun.file(`${extractedDir}/metadata.json`).json();
+	const offset = metadata?.pageOffset;
+	if (!Number.isInteger(offset) || offset < 1) {
+		throw new Error("metadata.json has no valid pageOffset; run extract.py again");
 	}
-
-	console.warn(
-		"  No pageOffset in metadata.json; treating extracted pages as printed pages.\n" +
-			"  Re-run extract.py so page numbers line up with the PDF.",
-	);
-	return 0;
+	return offset;
 }
 
-export async function chunkSections(extractedDir: string): Promise<Chunk[]> {
+async function chunkSections(extractedDir: string): Promise<Chunk[]> {
 	const sectionsJson = await Bun.file(`${extractedDir}/sections.json`).text();
 	const sections: ExtractedSection[] = JSON.parse(sectionsJson);
 	const pageOffset = await readPageOffset(extractedDir);
@@ -232,15 +222,10 @@ async function main() {
 		const avgEmbedding = Math.round(
 			chunks.reduce((sum, c) => sum + c.embeddingText.length, 0) / chunks.length,
 		);
-		const multiPageSections = new Set(
-			chunks.filter((c) => c.chunkIndex > 0).map((c) => c.sectionId),
-		).size;
-
 		console.log("\nChunk statistics:");
 		console.log(`  Total chunks: ${chunks.length}`);
 		console.log(`  Average content size: ${avgContent} chars`);
 		console.log(`  Average embedding text size: ${avgEmbedding} chars`);
-		console.log(`  Sections spanning multiple chunks: ${multiPageSections}`);
 	} catch (error) {
 		console.error("Chunking failed:", error);
 		process.exit(1);

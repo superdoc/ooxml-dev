@@ -14,7 +14,6 @@
  */
 
 import { createDbClient } from "../../packages/shared/src/db/index.ts";
-import type { SpecContent } from "../../packages/shared/src/types/index.ts";
 
 interface EmbeddedChunk {
 	sectionId: string;
@@ -69,7 +68,7 @@ async function main() {
 		`;
 		if (!source) throw new Error(`Missing reference source for Part ${partNumber}`);
 
-		const items: Omit<SpecContent, "id">[] = chunks.map((chunk) => ({
+		const items = chunks.map((chunk) => ({
 			partNumber,
 			sectionId: chunk.sectionId,
 			title: chunk.sectionTitle,
@@ -81,13 +80,7 @@ async function main() {
 		}));
 
 		console.log("Replacing existing part...");
-		const result = await db.replacePart(partNumber, items, {
-			onProgress: (inserted) => {
-				if (inserted % 200 === 0 || inserted === items.length) {
-					console.log(`  ${inserted}/${items.length}`);
-				}
-			},
-		});
+		const result = await db.replacePart(partNumber, items);
 		console.log(`Replaced ${result.deleted} rows with ${result.inserted}`);
 
 		// Get stats

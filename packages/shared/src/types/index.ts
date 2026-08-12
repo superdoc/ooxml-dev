@@ -8,7 +8,6 @@ export interface SpecContent {
 	content: string;
 	contentType: string;
 	pageNumber: number | null;
-	sourceId?: number | null;
 	embedding?: number[];
 }
 

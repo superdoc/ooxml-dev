@@ -38,8 +38,8 @@ their actual pages and excludes contents-list entries from the corpus.
 
 ```bash
 bun run pdf:chunk    ./extracted/part1            ./chunks/part1.json
-bun run pdf:audit    ./extracted/part1
 bun run pdf:embed    ./chunks/part1.json          ./embedded/part1.json
+bun run sources:sync
 bun run pdf:upload   1                            ./embedded/part1.json
 ```
 
@@ -51,6 +51,5 @@ without re-extracting.
 - `pipeline.ts` - orchestrator (extract -> chunk -> embed -> upload)
 - `extract.py` - PDF -> page-aware, section-aware markdown via pymupdf4llm
 - `chunk.ts` - markdown -> page-aware 6 KB chunks with section IDs
-- `audit.ts` - rejects duplicate sections, contents entries, and invalid pages
 - `embed.ts` - chunks -> chunks + Voyage embeddings
 - `upload.ts` - atomic part replacement in `spec_content`
