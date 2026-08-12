@@ -13,7 +13,10 @@
     "lint": "biome check .",
     "format": "biome check --write .",
     "typecheck": "bun run --cwd apps/web typecheck && bun run --cwd apps/mcp-server typecheck && bun run --cwd packages/shared typecheck",
-    "release": "semantic-release",
+    "changeset": "changeset",
+    "changeset:status": "changeset status --since origin/main",
+    "release:version": "changeset version",
+    "release:publish": "changeset publish",
     "deploy": "bun run format && bun run lint && bun run --cwd apps/web deploy",
     "prepare": "lefthook install",
     "db:up": "docker compose up -d",
@@ -21,7 +24,7 @@
     "db:reset": "docker compose down -v && docker compose up -d",
     "db:shell": "docker compose exec db psql -U postgres -d ecma_spec",
     "db:migrate": "bun scripts/db-migrate.ts",
-		"mcp:users": "bun --env-file=.env apps/mcp-server/scripts/users.ts",
+    "mcp:users": "bun --env-file=.env apps/mcp-server/scripts/users.ts",
     "sources:sync": "bun scripts/sources-sync.ts",
     "pdf:ingest": "bun scripts/ingest-pdf/pipeline.ts",
     "pdf:chunk": "bun scripts/ingest-pdf/chunk.ts",
@@ -30,17 +33,13 @@
     "pdf:setup": "pip install -r scripts/requirements.txt",
     "xsd:fetch": "bun scripts/ingest-xsd/fetch.ts",
     "xsd:ingest": "bun scripts/ingest-xsd/ingest.ts",
-		"test": "export TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/ecma_spec} && bun test tests/web/ && bun test tests/db/ && bun test tests/ingest-xsd/ && bun test tests/mcp-server/"
+    "test": "export TEST_DATABASE_URL=${TEST_DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/ecma_spec} && bun test tests/web/ && bun test tests/db/ && bun test tests/ingest-xsd/ && bun test tests/mcp-server/"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.13",
-    "@semantic-release/commit-analyzer": "^13.0.1",
-    "@semantic-release/exec": "^7.1.0",
-    "@semantic-release/git": "^10.0.1",
-    "@semantic-release/github": "^12.0.2",
+    "@changesets/cli": "3.0.0",
     "fast-xml-parser": "^5.7.2",
     "lefthook": "^2.0.16",
-    "semantic-release": "^25.0.2",
     "typescript": "~5.9.3"
   }
 }

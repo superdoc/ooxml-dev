@@ -12,10 +12,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - uses: oven-sh/setup-bun@v2
 
       - run: bun install
+
+      - name: Check release intent
+        if: github.head_ref != 'changeset-release/main'
+        run: bun run changeset:status
 
       - name: Lint
         run: bun run lint
