@@ -6,6 +6,8 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/deploy.yml"
+      - "bun.lock"
+      - "package.json"
       - "apps/web/**"
       - "apps/mcp-server/**"
       - "db/migrations/**"
