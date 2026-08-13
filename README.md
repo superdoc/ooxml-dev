@@ -2,10 +2,13 @@
 
 [![Web](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=%40ooxml-dev%2Fweb%40*&label=Web&color=blue)](https://ooxml.dev)
 [![MCP Server](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=%40ooxml-dev%2Fmcp-server%40*&label=MCP%20Server&color=blue)](https://api.ooxml.dev/mcp)
-[![npm: not published](https://img.shields.io/badge/npm-not%20published-CB3837?logo=npm)](#cli)
+[![npm](https://img.shields.io/npm/v/%40ooxml-dev%2Fcli?label=CLI&color=CB3837&logo=npm)](https://www.npmjs.com/package/@ooxml-dev/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The OOXML spec, explained by people who actually implemented it.
+
+> [!NOTE]
+> The CLI and MCP server use the production ooxml.dev service. You may need to create an account and sign in. Sign-in is only used to control usage; the service is free.
 
 ## What is this?
 
@@ -24,19 +27,36 @@ We found these gaps while building SuperDoc. This project records what we learne
 
 ## CLI
 
-The private CLI gives people and agents a stable shell interface to the same reference. Run it from the repository root:
+Install the CLI with npm. Node.js 20 or later is required.
 
 ```bash
-bun run ooxml login
-bun run ooxml search "paragraph spacing"
-bun run ooxml element w:p
+npm install --global @ooxml-dev/cli
 ```
 
-The package is not published to npm yet. During this private beta, it stores sign-in tokens as plain text in the current user's application data directory. Do not use it from a shared account. See the [CLI README](apps/cli/README.md) for details.
+Sign in, then query the reference:
+
+```bash
+ooxml login
+ooxml search "paragraph spacing"
+ooxml element w:p
+```
+
+See the [CLI README](apps/cli/README.md) for all commands.
+
+## Agent skill
+
+The [`research-ooxml`](skills/research-ooxml/SKILL.md) skill teaches coding agents how to combine specification search and schema evidence through the CLI. Install the CLI first, then add the skill:
+
+```bash
+npx skills add superdoc/ooxml-dev --skill research-ooxml -g -y
+```
 
 ## MCP Server
 
 Search specification prose or query the schema graph for precise structural answers. The server works with Claude Code, Codex CLI, Cursor, and other MCP clients.
+
+> [!NOTE]
+> The hosted server uses MCP `2026-07-28` and remains compatible with current 2024 and 2025 clients.
 
 **Claude Code**
 
@@ -75,10 +95,6 @@ Four tool families share one server:
 - **Schema lookup** (over the parsed XSDs): `ooxml_element`, `ooxml_type`, `ooxml_children`, `ooxml_attributes`, `ooxml_enum`, `ooxml_namespace`
 - **Package metadata** (curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x): `ooxml_package_part`
 - **Preset shapes** (generated from Part 1 Annex D): `ooxml_preset_shape`
-
-### Authentication
-
-`/mcp` uses OAuth 2.1. Compatible clients register automatically and open the ooxml.dev sign-in and consent pages. Clerk verifies the user's identity. The MCP server handles dynamic client registration, PKCE, resource-bound tokens, refresh, and revocation.
 
 ## Development
 
