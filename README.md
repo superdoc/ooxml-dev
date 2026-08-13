@@ -43,6 +43,10 @@ ooxml element w:p
 
 See the [CLI README](apps/cli/README.md) for all commands.
 
+## Community
+
+Join the [SuperDoc Discord](https://discord.com/invite/b9UuaZRyaB) to discuss OOXML, ask implementation questions, and share what you are building. Use the `#ooxml-dev` channel for this project.
+
 ## Agent skill
 
 The [`research-ooxml`](skills/research-ooxml/SKILL.md) skill teaches coding agents how to combine specification search and schema evidence through the CLI. Install the CLI first, then add the skill:
