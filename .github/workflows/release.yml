@@ -11,6 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      id-token: write
 
     steps:
       - name: Create release token
@@ -42,5 +43,3 @@ jobs:
           publish-script: bun run release:publish
           commit-message: "chore(release): version packages"
           pr-title: "chore(release): version packages"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
