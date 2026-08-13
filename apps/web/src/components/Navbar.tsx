@@ -14,6 +14,7 @@ export function Navbar({ sticky = false, maxWidth = false, onSearchClick }: Navb
 	const location = useLocation();
 	const isDocsActive = location.pathname.startsWith("/docs");
 	const isSpecActive = location.pathname === "/spec";
+	const isCliActive = location.pathname === "/cli";
 	const isMcpActive = location.pathname === "/mcp";
 	const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -34,9 +35,12 @@ export function Navbar({ sticky = false, maxWidth = false, onSearchClick }: Navb
 					<NavLink to="/docs/" active={isDocsActive}>
 						Reference
 					</NavLink>
+					<NavLink to="/spec" active={isSpecActive}>
+						Spec
+					</NavLink>
 					<div className="flex items-center gap-1">
-						<NavLink to="/spec" active={isSpecActive}>
-							Spec
+						<NavLink to="/cli" active={isCliActive}>
+							CLI
 						</NavLink>
 						<span className="rounded bg-[var(--color-accent)]/15 px-1 py-0.5 text-[8px] font-medium text-[var(--color-accent)]">
 							new
@@ -84,9 +88,12 @@ export function Navbar({ sticky = false, maxWidth = false, onSearchClick }: Navb
 					<NavLink to="/docs/" active={isDocsActive} onClick={() => setMobileMenuOpen(false)}>
 						Reference
 					</NavLink>
+					<NavLink to="/spec" active={isSpecActive} onClick={() => setMobileMenuOpen(false)}>
+						Spec
+					</NavLink>
 					<div className="flex items-center gap-1">
-						<NavLink to="/spec" active={isSpecActive} onClick={() => setMobileMenuOpen(false)}>
-							Spec
+						<NavLink to="/cli" active={isCliActive} onClick={() => setMobileMenuOpen(false)}>
+							CLI
 						</NavLink>
 						<span className="rounded bg-[var(--color-accent)]/15 px-1 py-0.5 text-[8px] font-medium text-[var(--color-accent)]">
 							new

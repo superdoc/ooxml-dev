@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Outlet, RouterProvider } from "react-router-dom";
 import { DocsLayout } from "./pages/docs/Layout";
 import { DocsPage } from "./pages/docs/Page";
+import { Cli } from "./pages/Cli";
 import { Home } from "./pages/Home";
 import { Mcp } from "./pages/Mcp";
 import { NotFound } from "./pages/NotFound";
@@ -14,6 +15,7 @@ const router = createBrowserRouter([
 		element: <Outlet />,
 		children: [
 			{ path: "/", element: <Home /> },
+			{ path: "/cli", element: <Cli /> },
 			{ path: "/mcp", element: <Mcp /> },
 			{ path: "/spec", element: <SpecExplorer /> },
 			{

@@ -16,7 +16,13 @@ const staticPages: Record<string, SeoMeta> = {
 	"/mcp": {
 		title: "ECMA-376 MCP Server — Search the OOXML Spec with AI | ooxml.dev",
 		description:
-			"Search 18,000+ OOXML spec chunks with natural language. Works with Claude Code, Cursor, and any MCP-compatible client.",
+			"Search OOXML spec prose, inspect XSD schemas, look up OPC package metadata, and query preset shapes from an MCP client.",
+		type: "website",
+	},
+	"/cli": {
+		title: "OOXML CLI — Search ECMA-376 from Your Terminal | ooxml.dev",
+		description:
+			"Search the ECMA-376 specification and inspect OOXML schemas from your terminal or a coding agent.",
 		type: "website",
 	},
 	"/spec": {
@@ -54,7 +60,7 @@ export function getSeoMeta(path: string): SeoMeta {
 }
 
 export function getAllPaths(): string[] {
-	const paths = ["/", "/mcp", "/spec", "/docs"];
+	const paths = ["/", "/cli", "/mcp", "/spec", "/docs"];
 	for (const slug of Object.keys(docs)) {
 		if (slug === "index") continue;
 		paths.push(`/docs/${slug}`);

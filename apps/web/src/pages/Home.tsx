@@ -35,13 +35,13 @@ export function Home() {
 						NEW
 					</span>
 					<span className="text-[var(--color-text-secondary)]">
-						OOXML MCP — deterministic schema lookup for elements, attributes, types, enums
+						Use the OOXML reference from your terminal
 					</span>
 					<Link
-						to="/mcp"
+						to="/cli"
 						className="text-[var(--color-accent)] hover:text-[var(--color-accent-hover)] font-medium text-xs"
 					>
-						Connect →
+						Get the CLI →
 					</Link>
 				</div>
 			</main>

@@ -4,7 +4,7 @@ import { Navbar } from "../components/Navbar";
 import { getSeoMeta } from "../data/seo";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
-const MCP_ENDPOINT = `${import.meta.env.VITE_API_URL}/mcp`;
+const MCP_ENDPOINT = `${import.meta.env.VITE_API_URL ?? "https://api.ooxml.dev"}/mcp`;
 const CLAUDE_COMMAND = `claude mcp add --transport http ooxml ${MCP_ENDPOINT}`;
 const CODEX_COMMAND = `codex mcp add ooxml --url ${MCP_ENDPOINT}`;
 const CODEX_TOML = `[mcp_servers.ooxml]
@@ -65,6 +65,14 @@ const PACKAGE_TOOLS = [
 	},
 ];
 
+const PRESET_SHAPE_TOOLS = [
+	{
+		name: "ooxml_preset_shape",
+		description:
+			"Look up the ordered adjustment-guide names for a DrawingML preset shape from Part 1 Annex D.",
+	},
+];
+
 const EXAMPLE_QUERIES = [
 	"How do I add borders to a table cell?",
 	"How does numbering work in WordprocessingML?",
@@ -99,15 +107,24 @@ export function Mcp() {
 			<main className="mx-auto max-w-3xl px-4 py-12 sm:px-6">
 				{/* Header */}
 				<div className="text-center mb-12">
-					<div className="inline-flex items-center gap-2 bg-[var(--color-accent)]/10 text-[var(--color-accent)] px-3 py-1 rounded-full text-sm font-medium mb-4">
-						<span>⚡</span> MCP Server
+					<div className="mb-4 flex flex-wrap justify-center gap-2">
+						<div className="inline-flex items-center gap-2 rounded-full bg-[var(--color-accent)]/10 px-3 py-1 text-sm font-medium text-[var(--color-accent)]">
+							<span>⚡</span> MCP Server
+						</div>
+						<div className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-bg-secondary)] px-3 py-1 text-sm font-medium text-[var(--color-text-secondary)]">
+							Latest MCP (2026-07-28) · Stateless
+						</div>
 					</div>
 					<h1 className="text-3xl font-bold mb-4">OOXML reference for AI assistants</h1>
 					<p className="text-[var(--color-text-secondary)] max-w-xl mx-auto">
-						Three tool families: prose search across 18,000+ spec chunks, deterministic schema
-						lookup over the parsed XSDs, and curated OPC package metadata. Ask in natural language,
-						or query the structure directly.
+						Search spec prose, inspect XSD schemas, look up OPC package metadata, and query preset
+						shape guides from your AI assistant.
 					</p>
+				</div>
+
+				<div className="mb-8 rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-secondary)] p-5 text-sm text-[var(--color-text-secondary)]">
+					The hosted service is free. You may need to create an account and sign in when you
+					connect. Sign-in is only used to control usage.
 				</div>
 
 				{/* Endpoint */}
@@ -214,7 +231,7 @@ export function Mcp() {
 							{activeTab === "other" && (
 								<>
 									<p className="text-sm text-[var(--color-text-secondary)] mb-3">
-										Use the endpoint URL with any MCP-compatible client:
+										Use the endpoint URL with an MCP client that supports Streamable HTTP:
 									</p>
 									<div className="flex items-center gap-2 bg-[var(--color-bg-code)] rounded-lg px-4 py-3">
 										<code className="text-[var(--color-syntax-value)] font-mono text-sm flex-1">
@@ -292,6 +309,26 @@ export function Mcp() {
 					</div>
 				</div>
 
+				{/* Preset shape tools */}
+				<div className="mb-10">
+					<h2 className="font-semibold mb-2">Preset shapes</h2>
+					<p className="text-sm text-[var(--color-text-secondary)] mb-4">
+						Adjustment guides extracted from ECMA-376 Fourth Edition, Part 1 Annex D.
+					</p>
+					<div className="space-y-3">
+						{PRESET_SHAPE_TOOLS.map((tool) => (
+							<div key={tool.name} className="border border-[var(--color-border)] rounded-lg p-4">
+								<div className="flex items-start gap-3">
+									<code className="bg-[var(--color-bg-secondary)] text-[var(--color-text-primary)] px-2 py-1 rounded text-sm font-mono shrink-0">
+										{tool.name}
+									</code>
+									<p className="text-sm text-[var(--color-text-secondary)]">{tool.description}</p>
+								</div>
+							</div>
+						))}
+					</div>
+				</div>
+
 				{/* Example Queries */}
 				<div className="mb-10">
 					<h2 className="font-semibold mb-4">Example Queries</h2>
@@ -325,9 +362,8 @@ export function Mcp() {
 						tools.
 					</p>
 					<p className="text-sm text-[var(--color-text-secondary)]">
-						By connecting to this MCP server, your AI assistant gains prose search across the
-						ECMA-376 specification, deterministic schema lookup over the parsed XSDs, and curated
-						OPC package metadata—making it much easier to work with Office Open XML.
+						Connect this server to search the ECMA-376 specification, inspect XSD schemas, look up
+						OPC package metadata, and query preset shape guides.
 					</p>
 				</div>
 			</main>

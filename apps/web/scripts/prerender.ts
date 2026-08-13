@@ -122,6 +122,25 @@ function homePageHtml(): string {
 <p>The OOXML spec, explained by people who actually implemented it.</p>
 <p>Live previews, implementation notes, and what the spec doesn't tell you.</p>
 <a href="/docs/">Browse Reference</a>
+<a href="/cli/">Get the CLI</a>
+${navHtml()}
+</main>`;
+}
+
+function cliPageHtml(): string {
+	return `<main>
+<h1>OOXML reference from your terminal</h1>
+<p>Search the ECMA-376 specification and inspect OOXML schemas without leaving your terminal.</p>
+<h2>Install</h2>
+<p>Node.js 20 or later is required.</p>
+<pre><code>npm install --global @ooxml-dev/cli</code></pre>
+<h2>Try it</h2>
+<pre><code>ooxml login
+ooxml search &quot;paragraph spacing&quot;
+ooxml element w:p</code></pre>
+<p>The CLI uses the free, hosted ooxml.dev service. You may need to create an account and sign in. Sign-in is only used to control usage.</p>
+<h2>Use it with a coding agent</h2>
+<pre><code>npx skills add superdoc/ooxml-dev --skill research-ooxml -g -y</code></pre>
 ${navHtml()}
 </main>`;
 }
@@ -129,7 +148,8 @@ ${navHtml()}
 function mcpPageHtml(): string {
 	return `<main>
 <h1>OOXML reference for AI assistants</h1>
-<p>Connect your MCP-compatible client and get both natural-language search across the ECMA-376 spec and deterministic schema lookup over the parsed XSDs.</p>
+<p>Latest MCP (2026-07-28) · Stateless</p>
+<p>Connect an MCP client to search spec prose, inspect XSD schemas, look up OPC package metadata, and query preset shape guides.</p>
 <h2>Prose search</h2>
 <ul>
 <li><strong>ooxml_search</strong> — Semantic search across 18,000+ spec chunks.</li>
@@ -145,8 +165,12 @@ function mcpPageHtml(): string {
 <li><strong>ooxml_enum</strong> — Enumeration values for a simpleType.</li>
 <li><strong>ooxml_namespace</strong> — What's known about a namespace URI.</li>
 </ul>
+<h2>Package metadata</h2>
+<ul><li><strong>ooxml_package_part</strong> — Look up OPC part types.</li></ul>
+<h2>Preset shapes</h2>
+<ul><li><strong>ooxml_preset_shape</strong> — Look up adjustment guides for a preset shape.</li></ul>
 <h2>What is MCP?</h2>
-<p>The Model Context Protocol (MCP) is an open standard that lets AI assistants connect to external data sources and tools. Works with Claude Code, Codex CLI, Cursor, and any MCP-compatible client.</p>
+<p>The Model Context Protocol (MCP) is an open standard that lets AI assistants connect to external data sources and tools. This server works with Claude Code, Codex CLI, Cursor, and other clients that support Streamable HTTP.</p>
 ${navHtml()}
 </main>`;
 }
@@ -223,7 +247,7 @@ function buildHead(path: string): string {
 			},
 		};
 		meta.push(`<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>`);
-	} else if (path === "/mcp" || path === "/spec") {
+	} else if (path === "/cli" || path === "/mcp" || path === "/spec") {
 		const jsonLd = {
 			"@context": "https://schema.org",
 			"@type": "WebPage",
@@ -252,6 +276,7 @@ function buildHead(path: string): string {
 
 function getContentHtml(path: string): string {
 	if (path === "/") return homePageHtml();
+	if (path === "/cli") return cliPageHtml();
 	if (path === "/mcp") return mcpPageHtml();
 	if (path === "/spec") return specPageHtml();
 
