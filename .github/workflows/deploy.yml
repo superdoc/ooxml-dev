@@ -85,3 +85,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/mcp-server
+          # This subdirectory has no Bun lockfile, so automatic detection falls back to npm.
+          packageManager: bun
