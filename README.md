@@ -2,28 +2,61 @@
 
 [![Web](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=%40ooxml-dev%2Fweb%40*&label=Web&color=blue)](https://ooxml.dev)
 [![MCP Server](https://img.shields.io/github/v/tag/superdoc/ooxml-dev?filter=%40ooxml-dev%2Fmcp-server%40*&label=MCP%20Server&color=blue)](https://api.ooxml.dev/mcp)
+[![npm](https://img.shields.io/npm/v/%40ooxml-dev%2Fcli?label=CLI&color=CB3837&logo=npm)](https://www.npmjs.com/package/@ooxml-dev/cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 The OOXML spec, explained by people who actually implemented it.
 
+> [!NOTE]
+> The CLI and MCP server use the production ooxml.dev service. You may need to create an account and sign in. Sign-in is only used to control usage; the service is free.
+
 ## What is this?
 
-An interactive reference for OOXML, built by the team behind [SuperDoc](https://superdoc.dev). Every page combines XML structure, live rendered previews, and implementation notes the spec leaves out. The MCP server exposes the same knowledge to AI assistants: prose search across the spec PDFs and deterministic schema lookup over the parsed XSDs.
+ooxml.dev is an interactive OOXML reference built by the team behind [SuperDoc](https://superdoc.dev). It combines XML examples, live previews, and implementation notes with searchable specification text and schema data.
 
-- **Live previews** - Edit XML and see it render in real-time. Every example is a working document.
-- **Implementation notes** - Where Word diverges from the spec, what will break your code, and what to do about it.
-- **Semantic spec search** - 18,000+ spec chunks searchable by meaning via MCP server.
-- **Structural schema lookup** - Element children, attributes, types, enums, namespaces. Same MCP server, deterministic answers from the parsed XSDs.
+- **Live previews** — Edit XML and see the result immediately. Every example is a working document.
+- **Implementation notes** — Learn where Word differs from the specification and which details can break an implementation.
+- **Specification search** — Search more than 18,000 specification chunks by meaning.
+- **Schema lookup** — Inspect element children, attributes, types, enums, and namespaces from the parsed XSDs.
 
 ## Why?
 
-The ECMA-376 spec is 5,000+ pages and it lies. Word's actual behavior diverges from the standard in ways you only discover by building against it. The knowledge to implement OOXML correctly is locked inside a handful of companies that have no incentive to share it.
+ECMA-376 is more than 5,000 pages, and Word sometimes behaves differently from the standard or fills in details the text leaves unclear. Many of these differences appear only while building a document engine.
 
-We faced this at SuperDoc — building a document engine on native OOXML with no roadmap beyond an unreliable spec. We wrote down everything we learned and made it public. No one should have to reverse-engineer Word alone.
+We found these gaps while building SuperDoc. This project records what we learned so other implementers do not need to discover the same edge cases alone.
+
+## CLI
+
+Install the CLI with npm. Node.js 20 or later is required.
+
+```bash
+npm install --global @ooxml-dev/cli
+```
+
+Sign in, then query the reference:
+
+```bash
+ooxml login
+ooxml search "paragraph spacing"
+ooxml element w:p
+```
+
+See the [CLI README](apps/cli/README.md) for all commands.
+
+## Agent skill
+
+The [`research-ooxml`](skills/research-ooxml/SKILL.md) skill teaches coding agents how to combine specification search and schema evidence through the CLI. Install the CLI first, then add the skill:
+
+```bash
+npx skills add superdoc/ooxml-dev --skill research-ooxml -g -y
+```
 
 ## MCP Server
 
-Ask questions in natural language and get answers grounded in the spec, or query the schema graph for precise structural answers. Works with Claude Code, Codex CLI, Cursor, and any MCP-compatible client.
+Search specification prose or query the schema graph for precise structural answers. The server works with Claude Code, Codex CLI, Cursor, and other MCP clients.
+
+> [!NOTE]
+> The hosted server uses MCP `2026-07-28` and remains compatible with current 2024 and 2025 clients.
 
 **Claude Code**
 
@@ -44,7 +77,9 @@ Or in `~/.codex/config.toml`:
 url = "https://api.ooxml.dev/mcp"
 ```
 
-**Cursor** — add to your MCP settings:
+**Cursor**
+
+Add the server to your MCP settings:
 
 ```json
 {
@@ -61,10 +96,6 @@ Four tool families share one server:
 - **Package metadata** (curated from Part 1 §11.3.x / §12.3.x / §13.3.x / §15.x): `ooxml_package_part`
 - **Preset shapes** (generated from Part 1 Annex D): `ooxml_preset_shape`
 
-### Authentication
-
-`/mcp` uses OAuth 2.1. Compatible MCP clients register automatically, open the ooxml.dev sign-in and consent pages, and receive a token limited to this MCP server. Clerk handles user identity; the MCP server handles dynamic client registration, PKCE, tokens, refresh, and revocation.
-
 ## Development
 
 ```bash
@@ -75,15 +106,13 @@ bun run build                                             # Production build
 bun run build:prod                                        # Build with .env.prod
 ```
 
-Vite+ owns the web development, build, formatting, linting, workspace task, and Git hook
-workflows. Bun remains the package manager and test runtime because the test suite uses `bun:test`.
+Vite+ handles local development, builds, formatting, linting, workspace tasks, and Git hooks. Bun remains the package manager and test runtime because the tests use `bun:test`.
 
-`build:prod` requires a live Clerk publishable key. This prevents production deploys from using the
-auth fallback or a test Clerk instance.
+`build:prod` requires a live Clerk publishable key. This prevents a production deployment from using the auth fallback or a test Clerk instance.
 
 ## Contributing
 
-Contributions welcome. Add implementation notes, fix examples, or improve the reference.
+Contributions are welcome. Add implementation notes, fix examples, or improve the reference.
 
 ## License
 

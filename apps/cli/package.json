@@ -2,10 +2,10 @@
   "name": "@ooxml-dev/cli",
   "version": "0.1.0",
   "description": "Query the ooxml.dev reference from a terminal or agent skill.",
-  "private": true,
+  "license": "MIT",
   "type": "module",
   "bin": {
-    "ooxml": "./dist/cli.mjs"
+    "ooxml": "dist/cli.mjs"
   },
   "files": [
     "dist"
@@ -13,9 +13,13 @@
   "engines": {
     "node": ">=20"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "vp pack --clean",
     "dev": "bun src/cli.ts",
+    "prepublishOnly": "bun run build",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
