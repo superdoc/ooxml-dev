@@ -93,12 +93,17 @@ function CommandBlock({
 	label: string;
 	multiline?: boolean;
 }) {
-	const [copied, setCopied] = useState(false);
+	const [copyStatus, setCopyStatus] = useState<"idle" | "copied" | "failed">("idle");
 
-	const copy = () => {
-		navigator.clipboard.writeText(command);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
+	const copy = async () => {
+		try {
+			if (!navigator.clipboard?.writeText) throw new Error("Clipboard API unavailable");
+			await navigator.clipboard.writeText(command);
+			setCopyStatus("copied");
+		} catch {
+			setCopyStatus("failed");
+		}
+		setTimeout(() => setCopyStatus("idle"), 2000);
 	};
 
 	return (
@@ -117,8 +122,9 @@ function CommandBlock({
 				onClick={copy}
 				className="shrink-0 text-xs font-medium text-white hover:text-[var(--color-syntax-value)]"
 				aria-label={`Copy ${label}`}
+				aria-live="polite"
 			>
-				{copied ? "Copied" : "Copy"}
+				{copyStatus === "copied" ? "Copied" : copyStatus === "failed" ? "Copy failed" : "Copy"}
 			</button>
 		</div>
 	);
