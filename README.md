@@ -25,7 +25,7 @@ ECMA-376 is more than 5,000 pages, and Word sometimes behaves differently from t
 
 We found these gaps while building SuperDoc. This project records what we learned so other implementers do not need to discover the same edge cases alone.
 
-## CLI
+## CLI ![New](https://img.shields.io/badge/-NEW-2563EB)
 
 Install the CLI with npm. Node.js 20 or later is required.
 
@@ -42,6 +42,10 @@ ooxml element w:p
 ```
 
 See the [CLI README](apps/cli/README.md) for all commands.
+
+## Community
+
+Join the [SuperDoc Discord](https://discord.com/invite/b9UuaZRyaB) to discuss OOXML, ask implementation questions, and share what you are building. Use the `#ooxml-dev` channel for this project.
 
 ## Agent skill
 
