@@ -25,7 +25,7 @@ ECMA-376 is more than 5,000 pages, and Word sometimes behaves differently from t
 
 We found these gaps while building SuperDoc. This project records what we learned so other implementers do not need to discover the same edge cases alone.
 
-## CLI
+## CLI ![New](https://img.shields.io/badge/-NEW-2563EB)
 
 Install the CLI with npm. Node.js 20 or later is required.
 
