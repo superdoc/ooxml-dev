@@ -1,0 +1,4 @@
+interface:
+  display_name: "Research OOXML"
+  short_description: "Research OOXML rules and schema structure"
+  default_prompt: "Use $research-ooxml to investigate this OOXML question with the CLI."
