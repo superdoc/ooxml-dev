@@ -12,6 +12,7 @@
  */
 
 import { type OAuthHelpers, OAuthProvider } from "@cloudflare/workers-oauth-provider";
+import { authenticateAppKey, isAppKeyRequest } from "./app-auth";
 import { createDb } from "./db";
 import { embedQuery } from "./embeddings";
 import { executeMcpTool } from "./mcp";
@@ -26,6 +27,7 @@ import { authenticateClerkUser, handleAuthorizationRequest } from "./oauth-autho
 
 export interface Env {
 	DATABASE_URL: string;
+	PIP_API_KEY_SHA256?: string;
 	VOYAGE_API_KEY: string;
 	CLERK_PUBLISHABLE_KEY: string;
 	CLERK_SECRET_KEY: string;
@@ -160,7 +162,7 @@ const defaultHandler = {
 	},
 } satisfies ExportedHandler<Env>;
 
-export default new OAuthProvider<Env>({
+const oauthProvider = new OAuthProvider<Env>({
 	apiRoute: "/mcp",
 	apiHandler: mcpApiHandler,
 	defaultHandler,
@@ -175,6 +177,22 @@ export default new OAuthProvider<Env>({
 		resource_name: "OOXML Reference MCP Server",
 	},
 });
+
+export default {
+	async fetch(request: Request, env: Env, context: ExecutionContext) {
+		if (new URL(request.url).pathname === "/mcp" && isAppKeyRequest(request)) {
+			const props = await authenticateAppKey(request, env.PIP_API_KEY_SHA256);
+			if (!props) return new Response("Invalid application credential", { status: 401 });
+			const handler = createAuthenticatedMcpHandler({
+				usageRecorder: createDatabaseUsageRecorder(env.DATABASE_URL),
+				toolExecutor: (name, args) => executeMcpTool(name, args, env),
+				waitUntil: (promise) => context.waitUntil(promise),
+			});
+			return addCorsHeaders(await handler(request, props), getCorsHeaders(request));
+		}
+		return oauthProvider.fetch(request, env, context);
+	},
+} satisfies ExportedHandler<Env>;
 
 // REST API handlers for testing
 async function handleSearch(request: Request, env: Env): Promise<Response> {

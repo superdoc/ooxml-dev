@@ -24,6 +24,7 @@ const rows = await sql<
 		COUNT(*)::text AS call_count,
 		ARRAY_AGG(DISTINCT tool_name ORDER BY tool_name) AS tools
 	FROM mcp_usage_events
+	WHERE clerk_user_id IS NOT NULL
 	GROUP BY clerk_user_id
 	ORDER BY MAX(occurred_at) DESC
 	LIMIT 100
