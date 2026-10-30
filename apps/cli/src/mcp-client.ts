@@ -27,6 +27,24 @@ function newTransport(serverUrl: URL, provider: CliOAuthProvider): StreamableHTT
 }
 
 export async function connectToMcp(options: ConnectOptions): Promise<ConnectedMcpClient> {
+	const apiKey = process.env.OOXML_API_KEY;
+	if (apiKey !== undefined) {
+		if (!/^ooxml_app_[a-f0-9]{64}$/.test(apiKey))
+			throw new Error("OOXML_API_KEY is not a valid application key");
+		const client = newClient();
+		const transport = new StreamableHTTPClientTransport(new URL(MCP_URL), {
+			requestInit: { headers: { Authorization: `Bearer ${apiKey}` }, redirect: "error" },
+		});
+		try {
+			await client.connect(transport);
+			return { client, close: () => client.close() };
+		} catch {
+			await client.close().catch(() => {});
+			throw new Error(
+				"OOXML application connection failed; check the key and service availability",
+			);
+		}
+	}
 	const redirectUrl = `http://127.0.0.1:${options.callbackPort}/callback`;
 	const serverUrl = new URL(MCP_URL);
 	const credentials = await new CredentialStore().open();

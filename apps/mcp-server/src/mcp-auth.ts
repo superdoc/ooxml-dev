@@ -7,13 +7,15 @@ export const MCP_PROTOCOL_VERSION = "2026-07-28";
 export const MCP_RESOURCE_URL = "https://api.ooxml.dev/mcp";
 
 export interface McpAuthorizationProps {
-	userId: string;
+	userId: string | null;
+	appId?: string;
 	clientId: string;
 	scopes: string[];
 }
 
 export interface UsageEvent {
-	userId: string;
+	userId: string | null;
+	appId?: string;
 	tool: string;
 	surface: "mcp";
 	client: string;
@@ -53,11 +55,20 @@ function inputSchemaFor(tool: ToolDef): z.ZodObject<Record<string, z.ZodType>> {
 
 function authenticatedIdentity(authInfo: AuthInfo | undefined): McpAuthorizationProps {
 	const userId = authInfo?.extra?.userId;
-	if (!authInfo || typeof userId !== "string") {
-		throw new Error("Authenticated Clerk user ID is missing from the MCP request context");
+	const appId = authInfo?.extra?.appId;
+	if (
+		!authInfo ||
+		!(typeof userId === "string" || (userId === null && typeof appId === "string"))
+	) {
+		throw new Error("Authenticated identity is missing from the MCP request context");
 	}
 
-	return { userId, clientId: authInfo.clientId, scopes: authInfo.scopes };
+	return {
+		userId: userId as string | null,
+		...(typeof appId === "string" ? { appId } : {}),
+		clientId: authInfo.clientId,
+		scopes: authInfo.scopes,
+	};
 }
 
 export function isMcpAuthorizationProps(value: unknown): value is McpAuthorizationProps {
@@ -77,9 +88,9 @@ export function createDatabaseUsageRecorder(connectionString: string): UsageReco
 		async record(event) {
 			await sql`
 				INSERT INTO mcp_usage_events
-					(clerk_user_id, oauth_client_id, tool_name, surface, occurred_at)
+					(clerk_user_id, app_id, oauth_client_id, tool_name, surface, occurred_at)
 				VALUES
-					(${event.userId}, ${event.client}, ${event.tool}, ${event.surface}, ${event.occurredAt})
+					(${event.userId}, ${event.appId ?? null}, ${event.appId ? null : event.client}, ${event.tool}, ${event.surface}, ${event.occurredAt})
 			`;
 			console.info("mcp usage", event);
 		},
@@ -122,6 +133,7 @@ export function createAuthenticatedMcpHandler(options: AuthenticatedMcpOptions) 
 						const text = await options.toolExecutor(tool.name, args);
 						recordUsage(options, {
 							userId: identity.userId,
+							...(identity.appId ? { appId: identity.appId } : {}),
 							tool: tool.name,
 							surface: "mcp",
 							client: identity.clientId,
@@ -146,7 +158,7 @@ export function createAuthenticatedMcpHandler(options: AuthenticatedMcpOptions) 
 				clientId: props.clientId,
 				scopes: props.scopes,
 				resource: new URL(MCP_RESOURCE_URL),
-				extra: { userId: props.userId },
+				extra: { userId: props.userId, appId: props.appId },
 			},
 		});
 	};

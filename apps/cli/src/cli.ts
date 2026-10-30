@@ -69,6 +69,9 @@ async function main(): Promise<void> {
 		return;
 	}
 	if (command.name === "login") {
+		if (process.env.OOXML_API_KEY !== undefined) {
+			throw new Error("ooxml login signs in a person; unset OOXML_API_KEY to use it");
+		}
 		await withClient(true, async () => {});
 		console.log("Signed in to ooxml.dev.");
 		return;
