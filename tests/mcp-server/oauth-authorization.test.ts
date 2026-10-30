@@ -30,7 +30,7 @@ const client: ClientInfo = {
 
 function options(overrides?: {
 	userId?: string | null;
-	authentication?: { userId: string; headers?: Headers } | Response | null;
+	authentication?: { userId: string | null; headers?: Headers } | Response;
 	clientInfo?: ClientInfo | null;
 	complete?: (value: CompleteAuthorizationOptions) => void;
 }) {
@@ -44,9 +44,9 @@ function options(overrides?: {
 			},
 		},
 		authenticateUser: async () => {
-			if (overrides && "authentication" in overrides) return overrides.authentication ?? null;
+			if (overrides?.authentication) return overrides.authentication;
 			const userId = overrides?.userId === undefined ? "user_test" : overrides.userId;
-			return userId ? { userId } : null;
+			return { userId };
 		},
 	};
 }
@@ -93,6 +93,23 @@ test("unsigned users continue through the custom Clerk sign-in page", async () =
 	expect(response.status).toBe(302);
 	expect(`${redirect.origin}${redirect.pathname}`).toBe("https://ooxml.dev/sign-in");
 	expect(redirect.searchParams.get("redirect_url")).toBe(AUTHORIZE_URL);
+});
+
+test("Clerk cookies are kept when an unsigned user is sent to sign in", async () => {
+	const response = await handleAuthorizationRequest(
+		new Request(AUTHORIZE_URL),
+		options({
+			authentication: {
+				userId: null,
+				headers: new Headers({
+					"Set-Cookie": "__clerk_handshake=; Domain=ooxml.dev; Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+				}),
+			},
+		}),
+	);
+
+	expect(response.status).toBe(302);
+	expect(response.headers.get("Set-Cookie")).toContain("__clerk_handshake=;");
 });
 
 test("signed-in users see the client and an explicit consent choice", async () => {

@@ -19,12 +19,12 @@ interface ClerkAuthEnv {
 	CLERK_SECRET_KEY: string;
 }
 
-interface AuthenticatedUser {
-	userId: string;
+interface Authentication {
+	userId: string | null;
 	headers?: Headers;
 }
 
-type AuthenticationResult = AuthenticatedUser | Response | null;
+type AuthenticationResult = Authentication | Response;
 
 interface AuthorizationHandlerOptions {
 	oauth: Pick<OAuthHelpers, "parseAuthRequest" | "lookupClient" | "completeAuthorization">;
@@ -191,10 +191,9 @@ export async function authenticateClerkUser(
 	if (requestState.status === "handshake") {
 		throw new Error("Clerk returned a session handshake without a redirect");
 	}
-	if (!requestState.isAuthenticated) return null;
-
-	const { userId } = requestState.toAuth();
-	return userId ? { userId, headers: requestState.headers } : null;
+	// Signed-out results still carry Set-Cookie headers, such as clearing a spent handshake.
+	const userId = requestState.isAuthenticated ? requestState.toAuth().userId : null;
+	return { userId, headers: requestState.headers };
 }
 
 export async function handleAuthorizationRequest(
@@ -218,9 +217,10 @@ export async function handleAuthorizationRequest(
 
 	const authentication = await options.authenticateUser(request);
 	if (authentication instanceof Response) return authentication;
-	if (!authentication) return signInRedirect(request, options.signInUrl ?? DEFAULT_SIGN_IN_URL);
 	const respond = (response: Response) =>
 		withAuthenticationHeaders(response, authentication.headers);
+	const { userId } = authentication;
+	if (!userId) return respond(signInRedirect(request, options.signInUrl ?? DEFAULT_SIGN_IN_URL));
 
 	if (request.method === "GET") return respond(consentPage(request, client, oauthRequest));
 
@@ -232,13 +232,13 @@ export async function handleAuthorizationRequest(
 	if (form.get("decision") !== "approve") return respond(denyAuthorization(oauthRequest));
 
 	const props: McpAuthorizationProps = {
-		userId: authentication.userId,
+		userId,
 		clientId: oauthRequest.clientId,
 		scopes: oauthRequest.scope,
 	};
 	const { redirectTo } = await options.oauth.completeAuthorization({
 		request: oauthRequest,
-		userId: authentication.userId,
+		userId,
 		metadata: { clientName: client.clientName ?? null },
 		scope: oauthRequest.scope,
 		props,
