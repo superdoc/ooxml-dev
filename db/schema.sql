@@ -55,11 +55,16 @@ CREATE INDEX idx_content_source ON spec_content(source_id);
 -- operational product data. Clerk remains the source of truth for identity.
 CREATE TABLE mcp_usage_events (
   id BIGSERIAL PRIMARY KEY,
-  clerk_user_id TEXT NOT NULL,
-  oauth_client_id TEXT NOT NULL,
+  clerk_user_id TEXT,
+  oauth_client_id TEXT,
   tool_name TEXT NOT NULL,
   surface TEXT NOT NULL,
-  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  app_id TEXT,
+  CONSTRAINT mcp_usage_identity CHECK (
+    (clerk_user_id IS NOT NULL AND oauth_client_id IS NOT NULL AND app_id IS NULL) OR
+    (clerk_user_id IS NULL AND oauth_client_id IS NULL AND app_id IS NOT NULL)
+  )
 );
 
 CREATE INDEX idx_mcp_usage_events_user_time
