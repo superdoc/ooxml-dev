@@ -124,4 +124,4 @@ MIT
 
 ---
 
-Built by 🦋 [SuperDoc — DOCX editing and tooling](https://superdoc.dev)
+Built by 🦋 [SuperDoc — DOCX Editor and Agent SDK](https://superdoc.dev)

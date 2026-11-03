@@ -379,7 +379,7 @@ export function Mcp() {
 							rel="noopener noreferrer"
 							className="text-[var(--color-accent)] underline decoration-[var(--color-accent)]/30 hover:decoration-[var(--color-accent)]"
 						>
-							SuperDoc — DOCX editing and tooling
+							SuperDoc — DOCX Editor and Agent SDK
 						</a>
 					</span>
 					<Link

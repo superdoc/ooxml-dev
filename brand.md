@@ -12,9 +12,9 @@ parent: SuperDoc
 
 ### Overview
 
-ooxml.dev is the interactive reference for ECMA-376 (Office Open XML) — built by the team behind SuperDoc — DOCX editing and tooling, a document engine that renders OOXML natively in the browser.
+ooxml.dev is the interactive reference for ECMA-376 (Office Open XML) — built by the team behind SuperDoc, the open source DOCX Editor and Agent SDK for reviewing, filling, and editing documents.
 
-It exists because the SuperDoc — DOCX editing and tooling team needed better OOXML documentation and it didn't exist. The official spec is 5,000+ pages of PDFs that omit critical rendering details. Word's actual behavior diverges from the spec in ways you only discover by building against it. So we wrote down everything we learned — the structure, the gotchas, the places where the spec lies — and made it public.
+It exists because the SuperDoc team needed better OOXML documentation and it didn't exist. The official spec is 5,000+ pages of PDFs that omit critical rendering details. Word's actual behavior diverges from the spec in ways you only discover by building against it. So we wrote down everything we learned — the structure, the gotchas, the places where the spec lies — and made it public.
 
 What ooxml.dev really does is translate implementation experience into usable knowledge. Every page combines XML structure, live rendered previews (powered by SuperDoc), and implementation notes that tell you what the spec doesn't: where Word disagrees with the standard, what will break your implementation, and what to do about it.
 
@@ -33,7 +33,7 @@ The problem it solves is information asymmetry. The knowledge required to implem
 **What ooxml.dev is NOT**:
 - Not the spec itself — we explain the spec, we don't replace it
 - Not an SDK or library — we teach the format, not an API
-- Not a document editor or viewer — SuperDoc — DOCX editing and tooling is the product, this is the knowledge
+- Not a document editor or viewer — SuperDoc is the product, this is the knowledge
 - Not a consulting service — the knowledge is free and public
 - Not academic documentation — every insight comes from shipping real code
 
@@ -113,7 +113,7 @@ ooxml.dev saves you the weeks of trial-and-error we already went through.
 
 ### Identity
 
-We build document infrastructure at SuperDoc — DOCX editing and tooling, and we learned OOXML the hard way — by implementing it against thousands of real documents and watching things break in ways the spec never warned us about.
+We build SuperDoc, the DOCX Editor and Agent SDK, and we learned OOXML the hard way — by implementing it against thousands of real documents and watching things break in ways the spec never warned us about.
 
 ooxml.dev is where we write down everything we learned. Not because we have to. Because the alternative — leaving every developer to independently discover that `w:tblGrid` crashes Word when omitted, or that style inheritance doesn't work the way the schema implies — is a waste of everyone's time. The knowledge exists. It should be accessible.
 
@@ -135,7 +135,7 @@ _Use on homepage hero, social bios, link previews._
 - Developer discovery: "5,000 pages of spec. The 200 that matter. The notes you actually need."
 - AI/MCP context: "Ask the spec anything, query the schema directly, or look up any OPC part type. One server."
 - Community pitch: "Hard-won OOXML knowledge, shared freely."
-- SuperDoc connection: "Built by SuperDoc — DOCX editing and tooling. Open to everyone."
+- SuperDoc connection: "Built by SuperDoc — DOCX Editor and Agent SDK. Open to everyone."
 - Credibility: "Every example is a working document."
 
 ### Message Pillars

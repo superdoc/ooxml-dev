@@ -6,7 +6,7 @@ An interactive reference for ECMA-376 (Office Open XML) built by the [SuperDoc](
 
 ## Why This Exists
 
-The official ECMA-376 spec is 5,000+ pages. Most of it you'll never need, and the parts you do need often omit critical rendering details that only surface when you compare against Word's actual behavior. This site fills that gap with implementation notes from building SuperDoc — a document engine that renders OOXML natively in the browser.
+The official ECMA-376 spec is 5,000+ pages. Most of it you'll never need, and the parts you do need often omit critical rendering details that only surface when you compare against Word's actual behavior. This site fills that gap with implementation notes from building SuperDoc, the open source DOCX Editor and Agent SDK for reviewing, filling, and editing documents.
 
 This is also how people discover SuperDoc. By sharing what we've learned, we position ourselves as the OOXML experts. Every page should reflect that authority: practical, specific, from-experience.
 

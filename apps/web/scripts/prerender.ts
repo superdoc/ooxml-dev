@@ -222,7 +222,7 @@ function buildHead(path: string): string {
 			dateModified: new Date().toISOString().split("T")[0],
 			author: {
 				"@type": "Organization",
-				name: "SuperDoc — DOCX editing and tooling",
+				name: "SuperDoc",
 				url: "https://superdoc.dev",
 			},
 			publisher: { "@type": "Organization", name: "ooxml.dev", url: "https://ooxml.dev" },
@@ -256,7 +256,7 @@ function buildHead(path: string): string {
 			url,
 			author: {
 				"@type": "Organization",
-				name: "SuperDoc — DOCX editing and tooling",
+				name: "SuperDoc",
 				url: "https://superdoc.dev",
 			},
 			publisher: { "@type": "Organization", name: "ooxml.dev", url: "https://ooxml.dev" },

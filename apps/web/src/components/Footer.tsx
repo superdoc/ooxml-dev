@@ -6,7 +6,7 @@ export function Footer() {
 				href="https://superdoc.dev/?utm_source=ooxml.dev&utm_medium=referral&utm_campaign=footer"
 				className="text-[var(--color-accent)] hover:underline"
 			>
-				SuperDoc — DOCX editing and tooling
+				SuperDoc — DOCX Editor and Agent SDK
 			</a>
 		</footer>
 	);

@@ -4,7 +4,7 @@
 
 > For full documentation content, see [/llms-full.txt](https://ooxml.dev/llms-full.txt)
 
-ooxml.dev is the interactive reference for ECMA-376 (Office Open XML) — the standard behind .docx, .xlsx, and .pptx files. Built by SuperDoc — DOCX editing and tooling (https://superdoc.dev) from experience implementing a full OOXML document engine.
+ooxml.dev is the interactive reference for ECMA-376 (Office Open XML) — the standard behind .docx, .xlsx, and .pptx files. Built by SuperDoc — DOCX Editor and Agent SDK (https://superdoc.dev) from experience implementing a full OOXML document engine.
 
 Every page combines XML structure, live rendered previews, and implementation notes that tell you what the spec doesn't: where Word diverges from the standard, what will break your code, and what to do about it.
 
@@ -52,4 +52,4 @@ Package metadata (curated from ECMA-376 Part 1 §11.3.x / §12.3.x / §13.3.x / 
 
 ## About
 
-ooxml.dev is built by SuperDoc — DOCX editing and tooling (https://superdoc.dev). SuperDoc is a document engine that renders OOXML natively in the browser. The implementation notes on ooxml.dev come from building that engine against thousands of real-world documents.
+ooxml.dev is built by SuperDoc (https://superdoc.dev). SuperDoc is the open source DOCX Editor and Agent SDK for reviewing, filling, and editing documents. Word-quality DOCX editing, built for your product. The implementation notes on ooxml.dev come from building that engine against thousands of real-world documents.
