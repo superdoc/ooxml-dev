@@ -1,3 +1,4 @@
+import { installGrowthAttribution } from "./lib/growth-attribution.mjs";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { createBrowserRouter, Outlet, RouterProvider } from "react-router-dom";
@@ -9,6 +10,8 @@ import { Mcp } from "./pages/Mcp";
 import { NotFound } from "./pages/NotFound";
 import { SpecExplorer } from "./pages/SpecExplorer";
 import "./index.css";
+
+installGrowthAttribution({ sourceProject: "ooxml_dev", measurementId: "G-JFTMJ85VCW" });
 
 const router = createBrowserRouter([
 	{

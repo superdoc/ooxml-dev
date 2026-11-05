@@ -17,6 +17,9 @@ jobs:
 
       - run: bunx --package vite-plus@0.2.9 vp install --frozen-lockfile
 
+      - name: Growth attribution privacy tests
+        run: bun run test:growth
+
       - name: Check
         run: bun run check
 
