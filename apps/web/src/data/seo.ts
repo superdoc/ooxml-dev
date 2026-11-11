@@ -7,6 +7,11 @@ export interface SeoMeta {
 }
 
 const staticPages: Record<string, SeoMeta> = {
+	"/privacy": {
+		title: "Privacy and cookie choices | ooxml.dev",
+		description: "How optional analytics and cookie choices work on ooxml.dev.",
+		type: "website",
+	},
 	"/": {
 		title: "ooxml.dev — The OOXML spec, explained by people who actually implemented it",
 		description:
@@ -60,7 +65,7 @@ export function getSeoMeta(path: string): SeoMeta {
 }
 
 export function getAllPaths(): string[] {
-	const paths = ["/", "/cli", "/mcp", "/spec", "/docs"];
+	const paths = ["/", "/cli", "/mcp", "/spec", "/docs", "/privacy"];
 	for (const slug of Object.keys(docs)) {
 		if (slug === "index") continue;
 		paths.push(`/docs/${slug}`);

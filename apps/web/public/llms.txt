@@ -53,3 +53,9 @@ Package metadata (curated from ECMA-376 Part 1 §11.3.x / §12.3.x / §13.3.x / 
 ## About
 
 ooxml.dev is built by SuperDoc (https://superdoc.dev). SuperDoc is the open source DOCX Editor and Agent SDK for reviewing, filling, and editing documents. Word-quality DOCX editing, built for your product. The implementation notes on ooxml.dev come from building that engine against thousands of real-world documents.
+
+## Privacy and cookie choices
+
+- [Privacy and cookie choices](https://ooxml.dev/privacy/)
+- [Privacy notice as Markdown](https://ooxml.dev/privacy.md)
+- Optional Google Analytics and referral events stay off until a choice on ooxml.dev. DNT and GPC keep them off. Cookie settings are available in every page footer.
