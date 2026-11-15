@@ -1,3 +1,6 @@
+import { installConsentControls } from "./lib/analytics-consent.mjs";
+import { Privacy } from "./pages/Privacy";
+import "./consent.css";
 import { installGrowthAttribution } from "./lib/growth-attribution.mjs";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
@@ -11,6 +14,7 @@ import { NotFound } from "./pages/NotFound";
 import { SpecExplorer } from "./pages/SpecExplorer";
 import "./index.css";
 
+installConsentControls({ measurementId: "G-JFTMJ85VCW", siteHost: "ooxml.dev" });
 installGrowthAttribution({ sourceProject: "ooxml_dev", measurementId: "G-JFTMJ85VCW" });
 
 const router = createBrowserRouter([
@@ -19,6 +23,7 @@ const router = createBrowserRouter([
 		children: [
 			{ path: "/", element: <Home /> },
 			{ path: "/cli", element: <Cli /> },
+			{ path: "/privacy", element: <Privacy /> },
 			{ path: "/mcp", element: <Mcp /> },
 			{ path: "/spec", element: <SpecExplorer /> },
 			{

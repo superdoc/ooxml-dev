@@ -7,6 +7,12 @@
  * Usage: bun apps/web/scripts/prerender.ts
  */
 
+import {
+	privacyTitle,
+	privacySections,
+	privacyLinks,
+	privacyMarkdown,
+} from "../src/lib/privacy-content.mjs";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { type DocPage, docs } from "../src/data/docs";
@@ -277,6 +283,8 @@ function buildHead(path: string): string {
 function getContentHtml(path: string): string {
 	if (path === "/") return homePageHtml();
 	if (path === "/cli") return cliPageHtml();
+	if (path === "/privacy")
+		return `<main class="site-privacy-page"><a href="/">Back to ooxml.dev</a><h1>${escapeHtml(privacyTitle)}</h1><p>Cookie choices for ooxml.dev.</p>${privacySections.map((section) => `<section><h2>${escapeHtml(section.title)}</h2><p>${escapeHtml(section.text)}</p></section>`).join("")}<section id="cookie-settings"><h2>Cookie settings</h2><button type="button" data-consent-open>Open cookie settings</button></section><ul>${privacyLinks.map((link) => `<li><a href="${escapeHtml(link.href)}">${escapeHtml(link.label)}</a></li>`).join("")}</ul><p><a href="/privacy.md">Read this notice as Markdown</a></p></main>`;
 	if (path === "/mcp") return mcpPageHtml();
 	if (path === "/spec") return specPageHtml();
 
@@ -391,6 +399,8 @@ for (const authPage of AUTH_PAGES) {
 const notFoundHtml = render404Page();
 writeFileSync(resolve(DIST, "404.html"), notFoundHtml);
 console.log(`  ✓ /404.html`);
+
+writeFileSync(resolve(DIST, "privacy.md"), privacyMarkdown("ooxml.dev"));
 
 // Generate sitemap
 const sitemap = generateSitemap(paths);
