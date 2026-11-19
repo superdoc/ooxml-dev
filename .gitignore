@@ -7,6 +7,8 @@ dev/
 !.env.example
 .mcp.json
 .vscode/
+test-results/
+playwright-report/
 
 # Local-only planning doc (public repo)
 PLAN.md

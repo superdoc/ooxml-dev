@@ -1,5 +1,7 @@
 export interface DocPage {
 	title: string;
+	datePublished: string;
+	dateModified: string;
 	description?: string;
 	badge?: string;
 	content: ContentBlock[];
@@ -21,6 +23,8 @@ type ContentBlock =
 
 export const docs: Record<string, DocPage> = {
 	index: {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Getting Started",
 		description: "OOXML structure, namespaces, and how to use this reference.",
 		content: [
@@ -68,6 +72,8 @@ export const docs: Record<string, DocPage> = {
 	},
 
 	tables: {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Tables",
 		description:
 			"Complete guide to OOXML tables - structure, properties, and implementation gotchas.",
@@ -156,6 +162,8 @@ export const docs: Record<string, DocPage> = {
 	},
 
 	paragraphs: {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Paragraphs",
 		description: "Text structure and formatting in OOXML - paragraphs, runs, and text elements.",
 		badge: "w:p",
@@ -221,6 +229,8 @@ export const docs: Record<string, DocPage> = {
 	},
 
 	styles: {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Styles",
 		description:
 			"How styling works in OOXML - style definitions, inheritance, and direct formatting.",
@@ -272,6 +282,8 @@ export const docs: Record<string, DocPage> = {
 	},
 
 	"paragraph-borders": {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Paragraph Borders",
 		description:
 			"Borders and shading around paragraphs — side borders, between-border groups, and the space attribute.",
@@ -453,6 +465,8 @@ Each border element has:
 	},
 
 	"bidirectional-text": {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Bidirectional Text (RTL)",
 		description:
 			"How RTL layout actually works in OOXML — paragraph direction, run-level bidi, and where alignment and tab stops break.",
@@ -711,6 +725,8 @@ w:rPr (run properties)
 	},
 
 	"creating-documents": {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Creating Documents",
 		description: "Step-by-step guide to creating a valid OOXML document from scratch.",
 		content: [
@@ -759,6 +775,8 @@ w:rPr (run properties)
 	},
 
 	"common-gotchas": {
+		datePublished: "2025-03-15",
+		dateModified: "2026-11-11",
 		title: "Common Gotchas",
 		description: "Real-world implementation issues and how to solve them.",
 		content: [
