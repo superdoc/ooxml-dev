@@ -125,3 +125,7 @@ MIT
 ---
 
 Built by 🦋 [SuperDoc — DOCX Editor and Agent SDK](https://superdoc.dev)
+
+### Analytics consent
+
+Analytics loads only after consent. See [site analytics consent](docs/analytics-consent.md) and run `bun run test:growth` after changing the controller.
