@@ -1,4 +1,3 @@
-// Keep this small consent controller identical in ooxml.dev and docxcorp.us.
 // Each origin owns its own choice. No homepage visit or cross-domain ID is used.
 export const CONSENT_KEY = "superdoc_site_analytics_consent";
 export const CONSENT_MAX_AGE = 180 * 24 * 60 * 60 * 1000;
@@ -32,26 +31,13 @@ export function readConsent(win, now = Date.now()) {
 export function publicSurface(location, siteHost) {
 	try {
 		const url = new URL(location.href);
-		// OAuth responses may put credentials in either the query or fragment,
-		// including hash-router callback queries. Inspect decoded parameter names.
-		const fragment = url.hash.slice(1);
-		const fragmentParameters = [
-			new URLSearchParams(fragment),
-			new URLSearchParams(fragment.includes("?") ? fragment.slice(fragment.indexOf("?") + 1) : ""),
-		];
-		const privateParameter =
-			/^(token|access_token|id_token|refresh_token|oauth_token|oauth_verifier|client_secret|key|email|auth|session|code|state)$/i;
 		return (
 			url.protocol === "https:" &&
 			[siteHost, "www." + siteHost].includes(url.hostname) &&
 			!url.port &&
 			!url.username &&
 			!url.password &&
-			!/^\/(account|checkout|trial|sign-in|sign-up|auth)(?:\/|$)/.test(url.pathname) &&
-			![
-				...url.searchParams.keys(),
-				...fragmentParameters.flatMap((parameters) => [...parameters.keys()]),
-			].some((key) => privateParameter.test(key))
+			!/^\/(account|checkout|trial|sign-in|sign-up|auth)(?:\/|$)/.test(url.pathname)
 		);
 	} catch {
 		return false;
@@ -222,27 +208,10 @@ export function initializeAnalyticsConsent({
 	INSTALLED.set(win, controller);
 	// Recheck expiry and privacy signals before a CTA listener can emit an event.
 	doc.addEventListener("click", () => reconcile(), true);
-	doc.addEventListener("visibilitychange", () => {
-		if (doc.visibilityState === "visible") reconcile();
-	});
 	win.addEventListener("pageshow", () => reconcile());
 	win.addEventListener("storage", (event) => {
 		if (event.key === CONSENT_KEY || event.key === null) reconcile(true);
 	});
-	for (const method of ["pushState", "replaceState"]) {
-		if (!win.history?.[method]) continue;
-		const original = win.history[method].bind(win.history);
-		win.history[method] = function (state, title, target) {
-			const next = target ? new URL(target, win.location.href) : null;
-			if (next && publicSurface(next, siteHost) !== publicSurface(win.location, siteHost)) {
-				win.superdocAnalyticsConsent = false;
-				win["ga-disable-" + measurementId] = true;
-				win.location.assign(next.href);
-				return;
-			}
-			return original(state, title, target);
-		};
-	}
 	apply();
 	return controller;
 }

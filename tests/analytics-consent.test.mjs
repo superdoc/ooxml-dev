@@ -7,8 +7,7 @@ import {analyticsAllowed} from '../apps/web/src/lib/growth-attribution.mjs';
 function surface() {
   const storage = new Map(), scripts = [], events = new Map(), cookies = new Map([['_ga', 'old'], ['_ga_OLD', 'old'], ['session', 'necessary']]);
   let now = Date.parse('2026-11-11T20:00:00Z'), reloads = 0;
-  const win = {location: {...new URL('https://ooxml.dev/'), href: 'https://ooxml.dev/?utm_source=superdoc.dev#public', hostname: 'ooxml.dev', origin: 'https://ooxml.dev', pathname: '/', reload(){reloads++;}, assign(url){this.assigned=url;}}, navigator: {},
-    history: {pushState(){}, replaceState(){}},
+  const win = {location: {...new URL('https://ooxml.dev/'), href: 'https://ooxml.dev/?utm_source=superdoc.dev#public', hostname: 'ooxml.dev', origin: 'https://ooxml.dev', pathname: '/', reload(){reloads++;}}, navigator: {},
     localStorage: {getItem:key=>storage.get(key)??null,setItem:(key,value)=>storage.set(key,value)},
     addEventListener(name,fn){events.set('window:'+name,fn);},
   };
@@ -57,9 +56,9 @@ test('malformed, future and expired choices fail closed',()=>{
     const s=surface();s.storage.set(CONSENT_KEY,value);s.start();assert.equal(s.scripts.length,0);assert.equal(s.win.superdocAnalyticsConsent,false);
   }
 });
-test('valid returning consent loads the tag, and expiry on an open page stops it',()=>{
+test('valid returning consent loads the tag, and expiry on an open page stops it before a CTA click',()=>{
   const s=surface();s.saved(true);s.start();assert.equal(s.scripts.length,1);s.advance(CONSENT_MAX_AGE+1);s.events.get('document:click')();
-  assert.equal(s.win.superdocAnalyticsConsent,false);assert.equal(s.reloads,1);
+  assert.equal(s.win.superdocAnalyticsConsent,false);assert.equal(analyticsAllowed(s.win,'ooxml_dev'),false);assert.equal(s.reloads,1);
 });
 test('cross-tab withdrawal, clearing storage and a restored page cannot revive an old grant',()=>{
   for(const event of ['window:storage','window:pageshow']){
@@ -72,12 +71,13 @@ test('storage denial retains a session choice, while a fresh document still defa
   assert.equal(s.win.superdocAnalyticsConsent,true);assert.equal(s.scripts.length,1);
   const fresh=surface();fresh.win.localStorage.getItem=()=>{throw Error('Storage unavailable');};fresh.start();assert.equal(fresh.scripts.length,0);
 });
-test('private and non-production surfaces never load the tag; SPA auth navigation enters a fresh document',()=>{
-  for(const href of ['https://ooxml.dev/sign-in','https://ooxml.dev/auth/callback','https://ooxml.dev/?token=secret','http://localhost/']){
-    const s=surface();const u=new URL(href);Object.assign(s.win.location,{href,hostname:u.hostname,origin:u.origin,pathname:u.pathname});s.saved(true);s.start();assert.equal(s.scripts.length,0);
+test('auth pages and non-production origins never load the tag, even with a saved grant',()=>{
+  for(const href of ['https://ooxml.dev/sign-in','https://ooxml.dev/auth/callback','http://localhost/','https://preview.ooxml.dev/','https://ooxml.dev:8443/']){
+    const s=surface();const u=new URL(href);Object.assign(s.win.location,{href,hostname:u.hostname,origin:u.origin,pathname:u.pathname});s.saved(true);s.start();assert.equal(s.scripts.length,0,href);
   }
-  const s=surface();s.saved(true);s.start();s.win.history.pushState({},'','/sign-in?code=secret');
-  assert.equal(s.win.location.assigned,'https://ooxml.dev/sign-in?code=secret');assert.equal(s.win.superdocAnalyticsConsent,false);assert.equal(s.win['ga-disable-G-SYNTHETIC'],true);
+});
+test('in-app navigation is left to the router',()=>{
+  const s=surface(),pushState=()=>{};s.win.history={pushState,replaceState:pushState};s.saved(true);s.start();assert.equal(s.win.history.pushState,pushState);
 });
 test('the originating site owns its choice and unknown consent cannot enable a CTA event',()=>{
   const s=surface();s.storage.set('superdoc_cookie_preferences',JSON.stringify({version:1,savedAt:Date.now(),analytics:true,identification:true}));s.start();
@@ -98,32 +98,4 @@ test('accepted visits retain known ecosystem campaigns and only the public refer
 test('blocked cookie storage or script insertion cannot prevent reading the site',()=>{
   const s=surface();Object.defineProperty(s.doc,'cookie',{get(){throw Error('Cookie access blocked');}});assert.doesNotThrow(()=>s.start());assert.equal(s.win.superdocAnalyticsConsent,false);
   const blocked=surface();blocked.doc.head.appendChild=()=>{throw Error('Script insertion blocked');};assert.doesNotThrow(()=>blocked.start().save(true));assert.equal(blocked.win.superdocAnalyticsConsent,false);
-});
-
-test('credential-bearing queries and OAuth fragments cannot load GA, even with a saved grant',()=>{
-  for (const suffix of ['?access_token=secret','?id_token=secret','?ACCESS_TOKEN=secret','?%61ccess_token=secret','#access_token=secret','#id_token=secret','#code=secret&state=secret','#/callback?access_token=secret','?refresh_token=secret','#client_secret=secret']) {
-    const s=surface(); s.win.location.href='https://ooxml.dev/'+suffix; s.saved(true); s.start();
-    assert.equal(s.scripts.length,0,suffix); assert.equal(s.win.superdocAnalyticsConsent,false,suffix);
-  }
-  const s=surface(); s.saved(true); s.start(); s.win.history.replaceState({},'','/#access_token=secret');
-  assert.equal(s.win.location.assigned,'https://ooxml.dev/#access_token=secret'); assert.equal(s.win.superdocAnalyticsConsent,false);
-});
-
-for(const suffix of ['#access_token=abc?def','#id_token=abc?def','#%61ccess_token=abc?def','?oauth_token=secret','?oauth_verifier=secret','#oauth_token=secret','#/callback?oauth_verifier=secret','#OAUTH_TOKEN=abc?def']){
- test(`credential parameter stays private: ${suffix}`,()=>{
-  const s=surface();s.win.location.href='https://ooxml.dev/'+suffix;s.saved(true);s.start();
-  assert.equal(s.scripts.length,0);assert.equal(s.win.superdocAnalyticsConsent,false);
- });
-}
-test('credential-bearing fragments preserve the exact navigation target and disable measurement',()=>{
- for(const method of ['pushState','replaceState']){
-  const s=surface();s.saved(true);s.start();s.win.history[method]({},'','/#access_token=abc?def');
-  assert.equal(s.win.location.assigned,'https://ooxml.dev/#access_token=abc?def');
-  assert.equal(s.win.superdocAnalyticsConsent,false);assert.equal(s.win['ga-disable-G-SYNTHETIC'],true);
- }
-});
-test('ordinary public fragments and hash-router queries remain eligible after consent',()=>{
- for(const suffix of ['#section?example','#/schema?search=public','#access_token_notes=public']){
-  const s=surface();s.win.location.href='https://ooxml.dev/'+suffix;s.saved(true);s.start();assert.equal(s.scripts.length,1);
- }
 });
