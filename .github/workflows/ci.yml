@@ -23,6 +23,9 @@ jobs:
       - name: Check
         run: bun run check
 
+      - name: Web tests
+        run: bun test tests/web/
+
       - name: Migration runner tests
         run: bun test tests/scripts/db-migrate.test.ts
 
@@ -40,3 +43,9 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Install browser for spec navigation tests
+        run: bunx playwright install --with-deps chromium
+
+      - name: Spec navigation browser tests
+        run: bun run test:browser

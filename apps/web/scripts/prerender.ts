@@ -14,6 +14,14 @@ import { getAllPaths, getSeoMeta } from "../src/data/seo";
 
 const DIST = resolve(import.meta.dir, "../dist");
 const SITE_URL = "https://ooxml.dev";
+const PUBLISHER_ID = "https://www.superdoc.dev/#organization";
+const PUBLISHER = {
+	"@context": "https://schema.org",
+	"@type": "Organization",
+	"@id": PUBLISHER_ID,
+	name: "SuperDoc",
+	url: "https://www.superdoc.dev",
+};
 const AUTH_PAGES = [
 	{ path: "/sign-in", title: "Sign in | ooxml.dev" },
 	{ path: "/sign-up", title: "Create an account | ooxml.dev" },
@@ -210,7 +218,11 @@ function buildHead(path: string): string {
 	];
 
 	// JSON-LD structured data
+	meta.push(`<script type="application/ld+json">${JSON.stringify(PUBLISHER)}</script>`);
 	if (seo.type === "article") {
+		const slug = path === "/docs" ? "index" : path.replace("/docs/", "");
+		const page = docs[slug];
+		if (!page) throw new Error(`Missing article metadata for ${path}`);
 		const jsonLd = {
 			"@context": "https://schema.org",
 			"@type": "TechArticle",
@@ -218,14 +230,10 @@ function buildHead(path: string): string {
 			description: seo.description,
 			url,
 			image: `${SITE_URL}/og-image.png`,
-			datePublished: "2025-03-15",
-			dateModified: new Date().toISOString().split("T")[0],
-			author: {
-				"@type": "Organization",
-				name: "SuperDoc",
-				url: "https://superdoc.dev",
-			},
-			publisher: { "@type": "Organization", name: "ooxml.dev", url: "https://ooxml.dev" },
+			datePublished: page.datePublished,
+			dateModified: page.dateModified,
+			author: { "@id": PUBLISHER_ID },
+			publisher: { "@id": PUBLISHER_ID },
 			about: {
 				"@type": "Thing",
 				name: "Office Open XML",
@@ -239,6 +247,7 @@ function buildHead(path: string): string {
 			"@type": "WebSite",
 			name: "ooxml.dev",
 			url: SITE_URL,
+			publisher: { "@id": PUBLISHER_ID },
 			description: seo.description,
 			potentialAction: {
 				"@type": "SearchAction",
@@ -254,12 +263,8 @@ function buildHead(path: string): string {
 			name: seo.title.split(" | ")[0].split(" — ")[0],
 			description: seo.description,
 			url,
-			author: {
-				"@type": "Organization",
-				name: "SuperDoc",
-				url: "https://superdoc.dev",
-			},
-			publisher: { "@type": "Organization", name: "ooxml.dev", url: "https://ooxml.dev" },
+			author: { "@id": PUBLISHER_ID },
+			publisher: { "@id": PUBLISHER_ID },
 			about: {
 				"@type": "Thing",
 				name: "Office Open XML",

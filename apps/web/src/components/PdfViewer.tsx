@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PDF_CONFIG, pdfUrlForPrintedPage } from "./pdfNavigation";
+import { officialPdfUrlForPrintedPage, PDF_CONFIG, pdfUrlForPrintedPage } from "./pdfNavigation";
 
 interface PdfViewerProps {
 	partNumber: number;
@@ -97,12 +97,13 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 
 	const progressPercent = (currentPage / config.totalPages) * 100;
 	const pdfUrl = pdfUrlForPrintedPage(currentPage, config);
+	const officialPdfUrl = officialPdfUrlForPrintedPage(currentPage, config);
 
 	return (
 		<div className="flex h-full flex-col bg-[var(--color-bg-secondary)]">
 			{/* Toolbar */}
 			<div className="border-b border-[var(--color-border)] bg-[var(--color-bg-primary)]">
-				<div className="flex items-center justify-between px-5 py-2.5">
+				<div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 px-5 py-2.5">
 					{/* Part label */}
 					<div className="text-sm text-[var(--color-text-secondary)]">
 						<span className="font-medium text-[var(--color-text-primary)]">Part {partNumber}</span>
@@ -136,6 +137,14 @@ export function PdfViewer({ partNumber, pageNumber, onPageChange }: PdfViewerPro
 							<span className="font-semibold text-[var(--color-text-primary)]">{currentPage}</span>
 							<span className="text-[var(--color-text-muted)]">of {config.totalPages}</span>
 						</div>
+						<a
+							href={officialPdfUrl}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-sm text-[var(--color-text-secondary)] underline hover:text-[var(--color-text-primary)]"
+						>
+							Open PDF in new tab
+						</a>
 					</div>
 				</div>
 
