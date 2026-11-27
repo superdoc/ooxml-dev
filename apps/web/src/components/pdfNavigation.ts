@@ -39,7 +39,10 @@ export function printedPageToSheet(printedPage: number, config: PdfConfig): numb
 	return clampedPage + config.pageOffset;
 }
 
+export function officialPdfUrlForPrintedPage(printedPage: number, config: PdfConfig): string {
+	return `${config.url}#page=${printedPageToSheet(printedPage, config)}`;
+}
+
 export function pdfUrlForPrintedPage(printedPage: number, config: PdfConfig): string {
-	const sheet = printedPageToSheet(printedPage, config);
-	return `${config.url}#page=${sheet}&toolbar=0&navpanes=0`;
+	return `${officialPdfUrlForPrintedPage(printedPage, config)}&toolbar=0&navpanes=0`;
 }

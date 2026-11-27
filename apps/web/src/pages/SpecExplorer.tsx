@@ -37,6 +37,7 @@ interface SpecSearchResult {
 
 // Default PDF URL for preloading
 const DEFAULT_PDF_URL = "https://cdn.ooxml.dev/ecma-376/part1.pdf";
+const REQUEST_TIMEOUT_MS = 15_000;
 
 export function SpecExplorer() {
 	const [searchParams] = useSearchParams();
@@ -110,6 +111,7 @@ function SpecExplorerView({
 			const requestId = activeRequestId.current;
 			const controller = new AbortController();
 			activeRequest.current = controller;
+			const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 			setSubmittedSearch(query);
 			setIsLoading(true);
 			setSearchFailed(false);
@@ -150,6 +152,7 @@ function SpecExplorerView({
 				setSearchFailed(true);
 				setViewerStatus((status) => (status === "ready" ? status : "search-error"));
 			} finally {
+				window.clearTimeout(timeout);
 				if (requestId === activeRequestId.current) setIsLoading(false);
 			}
 		},
@@ -163,7 +166,7 @@ function SpecExplorerView({
 		const requestId = activeRequestId.current;
 		const controller = new AbortController();
 		activeRequest.current = controller;
-		const timeout = window.setTimeout(() => controller.abort(), 15_000);
+		const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 		setIsLoading(true);
 		setSearchFailed(false);
 		setViewerStatus("pending");

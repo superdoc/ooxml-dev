@@ -69,7 +69,7 @@ describe("published prerender metadata", () => {
 	});
 
 	test("preserves all eight existing article dates across unrelated build clocks", () => {
-		// Actual published values checked November 19, 2026. Content edits may deliberately update a page.
+		// Values currently live on ooxml.dev as of November 19, 2026. Content edits may deliberately update a page.
 		for (const dist of builds) for (const route of legacyDocs) {
 			const article = structuredData(html(dist, route)).find(node => node["@type"] === "TechArticle");
 			expect(article?.datePublished, route).toBe("2025-03-15");

@@ -63,6 +63,7 @@ test("explicit section waits for mapping, then opens printed239 as PDF249 withou
 		await page.screenshot({ path: test.info().outputPath("pending.png") });
 		pending.resolve();
 		await expect(page.locator("iframe")).toHaveAttribute("src", `${part1}#page=249&toolbar=0&navpanes=0`);
+		await expect(page.getByRole("link", { name: "Open PDF in new tab" })).toHaveAttribute("href", `${part1}#page=249`);
 		expect(pdfs).toEqual([part1]);
 		expect(await page.evaluate(() => (window as Window & { createdPdfFrames: string[] }).createdPdfFrames)).toEqual([`${part1}#page=249&toolbar=0&navpanes=0`]);
 		await page.screenshot({ path: test.info().outputPath("resolved.png") });
@@ -298,5 +299,35 @@ for (const initialSection of [true, false]) {
 		await expect(page.locator("iframe")).toHaveAttribute("src", `${pdfOrigin}/ecma-376/part2.pdf#page=85&toolbar=0&navpanes=0`);
 		expect(queries).toEqual(["package relationships", "package relationships"]);
 		expect(sectionAttempts).toBe(initialSection ? 1 : 0);
+	});
+}
+
+for (const initialSection of [true, false]) {
+	test(`a stalled text search times out and offers a working retry (section=${initialSection})`, async ({ page }) => {
+		const stalled = deferred();
+		const queries: string[] = [];
+		await page.clock.install();
+		await isolate(page, async route => {
+			if (new URL(route.request().url()).pathname.endsWith("/section")) return route.fulfill({ status: 503, json: {} });
+			queries.push(route.request().postDataJSON().query);
+			if (queries.length === 1) {
+				await stalled.promise;
+				return route.fulfill({ json: result(2, 77, "9.1") }).catch(() => {}); // Timed-out request is aborted.
+			}
+			return route.fulfill({ json: result(2, 77, "9.1") });
+		});
+		try {
+			await page.goto(initialSection ? "/spec?section=17.3.1.24&part=1" : "/spec");
+			if (initialSection) await expect(page.getByRole("alert")).toBeVisible();
+			await page.locator("textarea").fill("package relationships");
+			await page.locator("textarea").press("Enter");
+			await expect.poll(() => queries.length).toBe(1);
+			await page.clock.fastForward(15_001);
+			await expect(page.getByRole("alert").filter({ hasText: "Search unavailable" })).toBeVisible();
+			await expect(page.locator("textarea")).toHaveValue("package relationships");
+			await page.getByRole("button", { name: "Retry search", exact: true }).click();
+			await expect(page.locator("iframe")).toHaveAttribute("src", `${pdfOrigin}/ecma-376/part2.pdf#page=85&toolbar=0&navpanes=0`);
+			expect(queries).toEqual(["package relationships", "package relationships"]);
+		} finally { stalled.resolve(); }
 	});
 }
